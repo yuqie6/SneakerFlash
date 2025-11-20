@@ -15,5 +15,5 @@ func main() {
 	kafka.InitProducer(config.Conf.Data.Kafka)
 
 	r := server.NewHttpServer()
-	r.Run()
+	r.Run(config.Conf.Server.Port)
 }
