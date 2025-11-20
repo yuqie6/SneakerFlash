@@ -2,7 +2,6 @@ package config
 
 import (
 	"log"
-	"time"
 
 	"github.com/spf13/viper"
 )
@@ -23,15 +22,15 @@ type DataConfig struct {
 }
 
 type DatabaseConfig struct {
-	Port        int       `mapstrcture:"port"`
-	User        string    `mapstrcture:"user"`
-	Password    string    `mapstrcture:"password"`
-	DBname      string    `mapstrcture:"dbname"`
-	Host        string    `mapstrcture:"host"`
-	LogLever    int       `mapstrcture:"log_lever"`
-	MaxIdle     int       `mapstrcture:"max_idle"`
-	MaxOpen     int       `mapstrcture:"max_open"`
-	MaxLiftTime time.Time `mapstrcture:"max_lift_time"`
+	Host        string `mapstrcture:"host"`
+	Port        int    `mapstrcture:"port"`
+	User        string `mapstrcture:"user"`
+	Password    string `mapstrcture:"password"`
+	DBname      string `mapstrcture:"dbname"`
+	LogLever    int    `mapstrcture:"log_lever"`
+	MaxIdle     int    `mapstrcture:"max_idle"`
+	MaxOpen     int    `mapstrcture:"max_open"`
+	MaxLifetime int    `mapstrcture:"max_lifetime"`
 }
 
 type RedisConfig struct {
