@@ -34,9 +34,12 @@ type DatabaseConfig struct {
 }
 
 type RedisConfig struct {
-	Addr     string `mapstrcture:"addr"`
-	Password string `mapstrcture:"password"`
-	DB       int    `mapstrcture:"db"`
+	Addr        string `mapstrcture:"addr"`
+	Password    string `mapstrcture:"password"`
+	DB          int    `mapstrcture:"db"`
+	PoolSize    int    `mapstrcture:"pool_size"`
+	MinIdle     int    `mapstrcture:"min_idle"`
+	ConnTimeout int    `mapstrcture:"conn_timeout"`
 }
 
 type KafkaConfig struct {
