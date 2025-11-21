@@ -3,26 +3,22 @@ package main
 import (
 	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/db"
+	"SneakerFlash/internal/infra/kafka"
 	"SneakerFlash/internal/infra/redis"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
+	"SneakerFlash/internal/repository"
+	"SneakerFlash/internal/service"
 )
 
 func main() {
 	config.Init()
 
 	db.Init(config.Conf.Data.Database)
-
 	redis.Init(config.Conf.Data.Redis)
 
-	// 启动消费者逻辑
-	log.Println("worker 启动中, 正在监听 kafka")
+	productRepo := repository.NewProductRepo(db.DB)
+	orderRepo := repository.NewOrderRepo(db.DB)
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	workerSvc := service.NewWorkerService(db.DB, productRepo, orderRepo)
 
-	log.Println("worker 退出")
+	kafka.StartConsumer(config.Conf.Data.Kafka, workerSvc.CreateOderFromMessage)
 }
