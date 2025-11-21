@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Server ServerConfig `mapstrcture:"server"`
 	Data   DataConfig   `mapstrcture:"data"`
+	JWT    JWTConfig    `mapstrcture:"jwt"`
 }
 
 type ServerConfig struct {
@@ -19,6 +20,11 @@ type DataConfig struct {
 	Database DatabaseConfig `mapstrcture:"database"`
 	Redis    RedisConfig    `mapstrcture:"redis"`
 	Kafka    KafkaConfig    `mapstrcture:"kafka"`
+}
+
+type JWTConfig struct {
+	Secret  string `mapstrcture:"secret"`
+	Expried int    `mapstrcture:"expried"`
 }
 
 type DatabaseConfig struct {
