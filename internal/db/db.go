@@ -2,7 +2,7 @@ package db
 
 import (
 	"SneakerFlash/internal/config"
-	"SneakerFlash/internal/models"
+	"SneakerFlash/internal/model"
 	"fmt"
 	"log"
 	"time"
@@ -64,9 +64,9 @@ func MakeMigrate() {
 	log.Println("正在迁移数据库")
 
 	err := DB.AutoMigrate(
-		&models.Order{},
-		&models.User{},
-		&models.Product{},
+		&model.Order{},
+		&model.User{},
+		&model.Product{},
 	)
 
 	if err != nil {
