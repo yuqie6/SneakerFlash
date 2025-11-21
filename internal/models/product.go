@@ -8,8 +8,13 @@ import (
 
 type Product struct {
 	gorm.Model
-	Name      string  `gorm:"not null"`
-	Price     float64 `gorm:"not null"`
-	Stock     int
-	StartTime time.Time
+	Name      string    `gorm:"type:varchar(100);not null" json:"name"`
+	Price     float64   `gorm:"type:decimal(10,2);not null" json:"price"`
+	Stock     int       `gorm:"not null" json:"stock"`
+	StartTime time.Time `gorm:"not null" json:"start_time"`
+	Image     string    `gorm:"type:varchar(255)" json:"image"`
+}
+
+func (Product) TableName() string {
+	return "products"
 }

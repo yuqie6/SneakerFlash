@@ -2,6 +2,7 @@ package db
 
 import (
 	"SneakerFlash/internal/config"
+	"SneakerFlash/internal/models"
 	"fmt"
 	"log"
 	"time"
@@ -53,4 +54,24 @@ func Init(cfg config.DatabaseConfig) {
 	log.Println("连接池设置成功")
 
 	DB = db
+}
+
+func MakeMigrate() {
+	if DB == nil {
+		log.Fatal("数据库没有初始化")
+	}
+
+	log.Println("正在迁移数据库")
+
+	err := DB.AutoMigrate(
+		&models.Order{},
+		&models.User{},
+		&models.Product{},
+	)
+
+	if err != nil {
+		log.Fatalf("数据库迁移失败: %v", err)
+	}
+
+	log.Println("数据库迁移成功")
 }
