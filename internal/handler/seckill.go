@@ -18,7 +18,7 @@ func NewSeckillHandler(svc *service.SeckillService) *SeckillHandler {
 }
 
 type SeckillReq struct {
-	ProductID uint `json:"product_id" binding:"requied"`
+	ProductID uint `json:"product_id" binding:"required"`
 }
 
 // 执行秒杀

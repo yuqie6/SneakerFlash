@@ -43,7 +43,7 @@ func NewHttpServer() *gin.Engine {
 
 		auth.POST("/products", productHandler.Create)
 
-		auth.POST(".seckill", seckillHandler.Seckill)
+		auth.POST("/seckill", seckillHandler.Seckill)
 	}
 	return r
 }
