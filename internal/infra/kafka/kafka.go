@@ -30,3 +30,17 @@ func InitProducer(cfg config.KafkaConfig) {
 	Producer = client
 	log.Println("kafka producer 连接成功")
 }
+
+func Send(topic, message string) error {
+	msg := &sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.StringEncoder(message),
+	}
+
+	partition, offset, err := Producer.SendMessage(msg)
+	if err != nil {
+		return err
+	}
+	log.Println("消息发送成功", topic, partition, offset)
+	return nil
+}
