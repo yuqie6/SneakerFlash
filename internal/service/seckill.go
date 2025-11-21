@@ -20,7 +20,7 @@ import (
 // argv1 用户 id
 var seckillScript = _redis.NewScript(`
 	-- 1. 检查用户是否已经抢购过
-	if redis.call("SISMENER", KEY[2], ARGV[1]) == 1 then
+	if redis.call("SISMENBER", KEY[2], ARGV[1]) == 1 then
 		return -1 -- 重复抢购
 	end
 
@@ -57,7 +57,7 @@ func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
 
 	// 1. 准备 redis key
 	stockKey := fmt.Sprintf("product:stock:%d", productID)
-	userSetKey := fmt.Sprintf("prodect:users:%d", userID)
+	userSetKey := fmt.Sprintf("product:users:%d", productID)
 
 	// 2. 执行 lua 脚本
 	res, err := seckillScript.Run(ctx, redis.RDB, []string{stockKey, userSetKey}, userID).Int()
@@ -66,9 +66,10 @@ func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
 	}
 
 	// 3. 处理 lua 结果
-	if res == -1 {
+	switch res {
+	case -1:
 		return "", errors.New("您已经抢购过该商品, 请勿重复下单")
-	} else if res == 0 {
+	case 0:
 		return "", errors.New("手慢无, 商品已经售罄")
 	}
 
