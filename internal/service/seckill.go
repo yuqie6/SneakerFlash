@@ -4,13 +4,13 @@ import (
 	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/infra/kafka"
 	"SneakerFlash/internal/infra/redis"
+	"SneakerFlash/internal/pkg/utils"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	_redis "github.com/redis/go-redis/v9"
 )
 
@@ -82,8 +82,10 @@ func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
 
 	// 4. 抢到了, 需要给 kafka 消息, 创建订单
 
-	// 生成订单 uuid
-	orderNum := uuid.New().String()
+	orderNum, err := utils.GenSnowflakeID()
+	if err != nil {
+		return "", ErrSeckillBusy
+	}
 
 	msg := SeckillMessage{
 		UserID:    userID,

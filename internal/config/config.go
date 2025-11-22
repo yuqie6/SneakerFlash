@@ -13,7 +13,8 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port string `mapstructure:"port"`
+	Port      string `mapstructure:"port"`
+	MachineID int    `mapstructure:"machineid"`
 }
 
 type DataConfig struct {
