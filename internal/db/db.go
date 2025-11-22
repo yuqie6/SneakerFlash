@@ -67,6 +67,7 @@ func MakeMigrate() {
 		&model.Order{},
 		&model.User{},
 		&model.Product{},
+		&model.Payment{},
 	)
 
 	if err != nil {
