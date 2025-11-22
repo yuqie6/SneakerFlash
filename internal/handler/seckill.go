@@ -25,9 +25,13 @@ type SeckillReq struct {
 func (h *SeckillHandler) Seckill(c *gin.Context) {
 	// 1. 获取当前用户
 	uid, exists := c.Get("userID")
-	userID := uid.(uint)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
+		return
+	}
+	userID, ok := uid.(uint)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户信息无效"})
 		return
 	}
 

@@ -18,8 +18,8 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 }
 
 type RegisterReq struct {
-	Username string `json:"user_name" binding:"requied"`
-	Password string `json:"user_password" binding:"requied"`
+	Username string `json:"user_name" binding:"required"`
+	Password string `json:"user_password" binding:"required"`
 }
 
 // 用户注册接口
