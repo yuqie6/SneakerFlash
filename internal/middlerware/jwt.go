@@ -1,6 +1,8 @@
 package middlerware
 
 import (
+	"SneakerFlash/internal/pkg/app"
+	"SneakerFlash/internal/pkg/e"
 	"SneakerFlash/internal/pkg/utils"
 	"net/http"
 	"strings"
@@ -10,10 +12,11 @@ import (
 
 func JWTauth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		appG := app.Gin{C: ctx}
 		// 1. 获取 header 中的 authorization
 		authHeader := ctx.GetHeader("authorization")
 		if authHeader == "" {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "请先登录"})
+			appG.ErrorMsg(http.StatusUnauthorized, e.ERROR_AUTH_CHECK_TOKEN_FAIL, "请先登录")
 			ctx.Abort()
 			return
 		}
@@ -21,7 +24,7 @@ func JWTauth() gin.HandlerFunc {
 		// 2. 格式校验
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "token 格式有误"})
+			appG.ErrorMsg(http.StatusUnauthorized, e.ERROR_AUTH_CHECK_TOKEN_FAIL, "token 格式有误")
 			ctx.Abort()
 			return
 		}
@@ -29,7 +32,7 @@ func JWTauth() gin.HandlerFunc {
 		// 解析 token
 		claims, err := utils.ParshToken(parts[1])
 		if err != nil {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "token 无效"})
+			appG.ErrorMsg(http.StatusUnauthorized, e.ERROR_AUTH_CHECK_TOKEN_FAIL, "token 无效")
 			ctx.Abort()
 			return
 		}

@@ -4,6 +4,7 @@ import (
 	"SneakerFlash/internal/pkg/app"
 	"SneakerFlash/internal/pkg/e"
 	"SneakerFlash/internal/service"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,12 +32,16 @@ func (h *UserHandler) Register(c *gin.Context) {
 	var req RegisterReq
 	// 1. 参数校验
 	if err := c.ShouldBindJSON(&req); err != nil {
-		appG.Error(http.StatusBadRequest, e.INVAILID_PARAMS)
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
 
 	// 2. 调用业务逻辑
 	if err := h.svc.Register(req.Username, req.Password); err != nil {
+		if errors.Is(err, service.ErrUserExited) {
+			appG.Error(http.StatusOK, e.ERROR_EXIST_USER)
+			return
+		}
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
@@ -50,13 +55,20 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	var req RegisterReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		appG.Error(http.StatusBadRequest, e.INVAILID_PARAMS)
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
 
 	token, err := h.svc.Login(req.Username, req.Password)
-	if err != nil {
+	switch {
+	case errors.Is(err, service.ErrUserNotFound):
 		appG.Error(http.StatusUnauthorized, e.ERROR_NOT_EXIST_USER)
+		return
+	case errors.Is(err, service.ErrPasswordWrong):
+		appG.ErrorMsg(http.StatusUnauthorized, e.ERROR_AUTH_CHECK_TOKEN_FAIL, "用户名或密码错误")
+		return
+	case err != nil:
+		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
 
