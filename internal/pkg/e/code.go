@@ -5,7 +5,13 @@ package e
 const (
 	SUCCESS        = 200
 	ERROR          = 500
+	ERROR_SYSTEM   = 501
 	INVALID_PARAMS = 400
+	UNAUTHORIZED   = 401
+	RATE_LIMIT     = 429
+
+	// 风控错误 7xx
+	RISK_BLOCKED = 700
 
 	// 用户模块错误 100xx
 	ERROR_EXIST_USER            = 10001
@@ -25,7 +31,11 @@ const (
 var Msglags = map[int]string{
 	SUCCESS:        "ok",
 	ERROR:          "系统开小差了，请稍后重试",
+	ERROR_SYSTEM:   "系统繁忙，请稍后重试",
 	INVALID_PARAMS: "请求参数错误",
+	UNAUTHORIZED:   "未登录或token已失效",
+	RATE_LIMIT:     "请求过于频繁，请稍后再试",
+	RISK_BLOCKED:   "触发风控，暂时无法操作",
 
 	ERROR_EXIST_USER:            "用户已存在",
 	ERROR_NOT_EXIST_USER:        "用户不存在",
