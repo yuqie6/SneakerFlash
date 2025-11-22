@@ -18,13 +18,22 @@ type Response struct {
 	Data any    `json:"data,omitempty"`
 }
 
-// 基础响应
-func (g *Gin) Response(httpCode, errCode int, data any) {
+func (g *Gin) response(httpCode, errCode int, msg string, data any) {
 	g.C.JSON(httpCode, Response{
 		Code: errCode,
-		Msg:  e.GetMsg(errCode),
+		Msg:  msg,
 		Data: data,
 	})
+}
+
+// 基础响应
+func (g *Gin) Response(httpCode, errCode int, data any) {
+	g.response(httpCode, errCode, e.GetMsg(errCode), data)
+}
+
+// 自定义提示的错误响应
+func (g *Gin) ErrorMsg(httpCode, errCode int, msg string) {
+	g.response(httpCode, errCode, msg, nil)
 }
 
 // 成功响应
