@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"SneakerFlash/internal/pkg/app"
+	"SneakerFlash/internal/pkg/e"
 	"SneakerFlash/internal/service"
 	"net/http"
 
@@ -24,55 +26,58 @@ type RegisterReq struct {
 
 // 用户注册接口
 func (h *UserHandler) Register(c *gin.Context) {
+	appG := app.Gin{C: c}
+
 	var req RegisterReq
 	// 1. 参数校验
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		appG.Error(http.StatusBadRequest, e.INVAILID_PARAMS)
 		return
 	}
 
 	// 2. 调用业务逻辑
 	if err := h.svc.Register(req.Username, req.Password); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "注册成功"})
+	appG.Success(gin.H{"message": "注册成功"})
 }
 
 // 用户登录接口
 func (h *UserHandler) Login(c *gin.Context) {
+	appG := app.Gin{C: c}
+
 	var req RegisterReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		appG.Error(http.StatusBadRequest, e.INVAILID_PARAMS)
 		return
 	}
 
 	token, err := h.svc.Login(req.Username, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		appG.Error(http.StatusUnauthorized, e.ERROR_NOT_EXIST_USER)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"msg":   "登录成功",
-		"token": token,
-	})
+	appG.Success(gin.H{"token": token})
 }
 
 // 获取个人信息
 func (h *UserHandler) GetProfile(c *gin.Context) {
+	appG := app.Gin{C: c}
+
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+		appG.Error(http.StatusUnauthorized, e.ERROR_NOT_EXIST_USER)
 		return
 	}
 
 	user, err := h.svc.GetProfile(userID.(uint))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": user})
+	appG.Success(user)
 }
