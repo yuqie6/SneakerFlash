@@ -2,6 +2,8 @@ package config
 
 import (
 	"log"
+	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -57,9 +59,18 @@ type KafkaConfig struct {
 var Conf Config
 
 func Init() {
-	viper.SetConfigName("config")
-	viper.SetConfigType("yml")
-	viper.AddConfigPath("./")
+	configFile := os.Getenv("SNEAKERFLASH_CONFIG")
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
+	} else {
+		viper.SetConfigName("config")
+		viper.SetConfigType("yml")
+		viper.AddConfigPath("./")
+	}
+
+	viper.AutomaticEnv()
+	viper.SetEnvPrefix("SNEAKERFLASH")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
