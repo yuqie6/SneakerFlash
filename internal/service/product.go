@@ -22,7 +22,8 @@ type ProductService struct {
 }
 
 var (
-	ErrProductNotFound = errors.New("找不到商品信息")
+	ErrProductNotFound  = errors.New("找不到商品信息")
+	ErrProductDuplicate = errors.New("商品已存在")
 )
 
 func NewProductService(repo *repository.ProductRepo) *ProductService {
@@ -34,10 +35,18 @@ func NewProductService(repo *repository.ProductRepo) *ProductService {
 // 业务 1: 创建商品
 func (s *ProductService) CreateProduct(product *model.Product) error {
 	if err := s.repo.Create(product); err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return ErrProductDuplicate
+		}
 		return err
 	}
 
-	return s.SyncStockToRedis(product.ID, product.Stock)
+	if err := s.SyncStockToRedis(product.ID, product.Stock); err != nil {
+		// 预热失败尝试回滚数据库记录，保持一致性
+		_ = s.repo.Delete(product.ID)
+		return err
+	}
+	return nil
 }
 
 // 业务 2: 库存预热(核心)
