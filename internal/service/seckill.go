@@ -44,6 +44,12 @@ func NewSeckillService() *SeckillService {
 	return &SeckillService{}
 }
 
+var (
+	ErrSeckillRepeat = errors.New("您已经抢购过该商品")
+	ErrSeckillFull   = errors.New("手慢无, 商品已经售罄")
+	ErrSeckillBusy   = errors.New("系统繁忙, 请稍后重试")
+)
+
 // kafka 消息结构体
 type SeckillMessage struct {
 	UserID    uint      `json:"user_id"`
@@ -69,9 +75,9 @@ func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
 	// 3. 处理 lua 结果
 	switch res {
 	case -1:
-		return "", errors.New("您已经抢购过该商品, 请勿重复下单")
+		return "", ErrSeckillRepeat
 	case 0:
-		return "", errors.New("手慢无, 商品已经售罄")
+		return "", ErrSeckillFull
 	}
 
 	// 4. 抢到了, 需要给 kafka 消息, 创建订单
@@ -95,7 +101,7 @@ func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
 		redis.RDB.Incr(ctx, stockKey)
 		redis.RDB.SRem(ctx, userSetKey, userID)
 
-		return "", errors.New("系统繁忙, 请稍后重试")
+		return "", ErrSeckillBusy
 	}
 	return orderNum, nil
 }
