@@ -85,7 +85,7 @@ func (s *ProductService) GetProductByID(id uint) (*model.Product, error) {
 			}
 			var p model.Product
 			json.Unmarshal([]byte(val), &p)
-			return p, nil
+			return &p, nil
 		}
 
 		// 查数据库
@@ -114,5 +114,9 @@ func (s *ProductService) GetProductByID(id uint) (*model.Product, error) {
 		return nil, err
 	}
 
-	return raw.(*model.Product), nil
+	product, ok := raw.(*model.Product)
+	if !ok {
+		return nil, fmt.Errorf("invalid product data type")
+	}
+	return product, nil
 }
