@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Server ServerConfig `mapstructure:"server"`
 	Data   DataConfig   `mapstructure:"data"`
+	JWT    JWTConfig    `mapstructure:"jwt"`
 }
 
 type ServerConfig struct {
@@ -19,7 +20,6 @@ type DataConfig struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Kafka    KafkaConfig    `mapstructure:"kafka"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
 }
 
 type JWTConfig struct {

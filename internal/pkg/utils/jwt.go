@@ -16,7 +16,7 @@ type Claims struct {
 // 签发 token
 func GenerateToken(userID uint, username string) (string, error) {
 	now := time.Now()
-	expireTime := now.Add(time.Duration(config.Conf.Data.JWT.Expried) * time.Second)
+	expireTime := now.Add(time.Duration(config.Conf.JWT.Expried) * time.Second)
 
 	claims := Claims{
 		UserID:   userID,
@@ -28,13 +28,13 @@ func GenerateToken(userID uint, username string) (string, error) {
 	}
 
 	tokenClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return tokenClaims.SignedString([]byte(config.Conf.Data.JWT.Secret))
+	return tokenClaims.SignedString([]byte(config.Conf.JWT.Secret))
 }
 
 // 解析 token
 func ParshToken(token string) (*Claims, error) {
 	tokenClaims, err := jwt.ParseWithClaims(token, &Claims{}, func(t *jwt.Token) (any, error) {
-		return []byte(config.Conf.Data.JWT.Secret), nil
+		return []byte(config.Conf.JWT.Secret), nil
 	})
 
 	if tokenClaims != nil {
