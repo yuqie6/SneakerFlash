@@ -22,7 +22,7 @@ func (r *OrderRepo) Create(order *model.Order) error {
 
 func (r *OrderRepo) GetByOrderNum(orderNum string) (*model.Order, error) {
 	var order model.Order
-	if err := r.db.Where("order_num = ?", orderNum).Error; err != nil {
+	if err := r.db.Where("order_num = ?", orderNum).First(&order).Error; err != nil {
 		return nil, err
 	}
 
@@ -34,13 +34,15 @@ func (r *OrderRepo) ListByUserID(uid uint, page, pagesize int) ([]model.Order, i
 	var orders []model.Order
 	var total int64
 
-	query := r.db.Model(&model.Order{}).Where("id = ?", uid)
+	query := r.db.Model(&model.Order{}).Where("user_id = ?", uid)
 
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 
 	offset := (page - 1) * pagesize
 
-	err := query.Offset(offset).Limit(pagesize).Order("create_at desc").Find(&orders).Error
+	err := query.Offset(offset).Limit(pagesize).Order("created_at desc").Find(&orders).Error
 
 	return orders, total, err
 }
