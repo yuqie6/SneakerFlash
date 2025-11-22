@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/pkg/app"
 	"SneakerFlash/internal/pkg/e"
 	"SneakerFlash/internal/service"
@@ -23,6 +24,10 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 type RegisterReq struct {
 	Username string `json:"user_name" binding:"required"`
 	Password string `json:"user_password" binding:"required"`
+}
+
+type RefreshReq struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
 // 用户注册接口
@@ -59,7 +64,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := h.svc.Login(req.Username, req.Password)
+	access, refresh, err := h.svc.Login(req.Username, req.Password)
 	switch {
 	case errors.Is(err, service.ErrUserNotFound):
 		appG.Error(http.StatusUnauthorized, e.ERROR_NOT_EXIST_USER)
@@ -72,7 +77,11 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	appG.Success(gin.H{"token": token})
+	appG.Success(gin.H{
+		"access_token":  access,
+		"refresh_token": refresh,
+		"expires_in":    config.Conf.JWT.Expried,
+	})
 }
 
 // 获取个人信息
@@ -92,4 +101,30 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	}
 
 	appG.Success(user)
+}
+
+// 刷新 access token
+func (h *UserHandler) Refresh(c *gin.Context) {
+	appG := app.Gin{C: c}
+
+	var req RefreshReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	token, err := h.svc.Refresh(req.RefreshToken)
+	switch {
+	case errors.Is(err, service.ErrTokenInvalid), errors.Is(err, service.ErrTokenExpired):
+		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		return
+	case err != nil:
+		appG.Error(http.StatusInternalServerError, e.ERROR)
+		return
+	}
+
+	appG.Success(gin.H{
+		"access_token": token,
+		"expires_in":   config.Conf.JWT.Expried,
+	})
 }

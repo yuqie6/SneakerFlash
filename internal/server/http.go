@@ -52,6 +52,7 @@ func NewHttpServer() *gin.Engine {
 	{
 		api.POST("/register", userHandler.Register)
 		api.POST("/login", userHandler.Login)
+		api.POST("/refresh", userHandler.Refresh)
 
 		api.GET("/products", productHandler.ListProducts)
 		api.GET("/product/:id", productHandler.GetProduct)

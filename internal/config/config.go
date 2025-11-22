@@ -26,8 +26,9 @@ type DataConfig struct {
 }
 
 type JWTConfig struct {
-	Secret  string `mapstructure:"secret"`
-	Expried int    `mapstructure:"expried"`
+	Secret         string `mapstructure:"secret"`
+	Expried        int    `mapstructure:"expried"`
+	RefreshExpried int    `mapstructure:"refresh_expried"`
 }
 
 type DatabaseConfig struct {
