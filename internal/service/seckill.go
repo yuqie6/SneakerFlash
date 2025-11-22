@@ -20,21 +20,22 @@ import (
 // argv1 用户 id
 var seckillScript = _redis.NewScript(`
 	-- 1. 检查用户是否已经抢购过
-	if redis.call("SISMENBER", KEY[2], ARGV[1]) == 1 then
+	if redis.call("SISMEMBER", KEYS[2], ARGV[1]) == 1 then
 		return -1 -- 重复抢购
 	end
 
 	-- 2. 检查库存是否充足
-	local stock = tonumber(redis.call("GET", KEY[1]))
+	local stock = tonumber(redis.call("GET", KEYS[1]))
 	if stock == nil or stock <= 0 then
 		return 0 -- 库存不足
 	end
 
 	-- 3. 扣减库存
-	redis.call("DECR", KEY[1])
+	redis.call("DECR", KEYS[1])
 	
 	-- 4. 记录该用户已经抢购
-	redis.call("SADD", KEY[2], ARGV[1])
+	redis.call("SADD", KEYS[2], ARGV[1])
+	return 1
 `)
 
 type SeckillService struct{}
