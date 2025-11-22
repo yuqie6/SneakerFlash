@@ -1,10 +1,13 @@
 package service
 
 import (
+	"SneakerFlash/internal/infra/redis"
 	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/repository"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 
 	"gorm.io/gorm"
@@ -32,7 +35,7 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 	}
 
 	// 2. 开启数据事务
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// 构建支持事务的 repo
 		txProductRepo := repository.NewProductRepo(tx)
 		txOrderRepo := repository.NewOrderRepo(tx)
@@ -64,4 +67,13 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		log.Printf("[INFO] 创建订单成功: userID: %d productID: %d", msg.UserID, msg.ProductID)
 		return nil
 	})
+	if err != nil {
+		// 事务失败，回滚缓存库存，避免用户库存被锁死
+		ctx := context.Background()
+		stockKey := fmt.Sprintf("product:stock:%d", msg.ProductID)
+		userSetKey := fmt.Sprintf("product:users:%d", msg.ProductID)
+		redis.RDB.Incr(ctx, stockKey)
+		redis.RDB.SRem(ctx, userSetKey, msg.UserID)
+	}
+	return err
 }
