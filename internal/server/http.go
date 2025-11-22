@@ -6,6 +6,7 @@ import (
 	"SneakerFlash/internal/middlerware"
 	"SneakerFlash/internal/repository"
 	"SneakerFlash/internal/service"
+	"net/http"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -27,14 +28,25 @@ func NewHttpServer() *gin.Engine {
 	seckillHandler := handler.NewSeckillHandler(seckillServicer)
 
 	// 注册路由
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Logger(), gin.Recovery())
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
+		AllowOriginFunc: func(origin string) bool {
+			// 预留按需放通其他前端域名
+			return true
+		},
+		AllowWebSockets: true,
 	}))
+
+	// 处理预检请求
+	r.OPTIONS("/*path", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
 
 	api := r.Group("/api/v1")
 	{
