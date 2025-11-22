@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	_redis "github.com/redis/go-redis/v9"
@@ -97,8 +98,16 @@ func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
 	msgBytes, _ := json.Marshal(msg)
 
 	// 5. 投递给kafka
-	err = kafka.Send(config.Conf.Data.Kafka.Topic, string(msgBytes))
-	if err != nil {
+	var sendErr error
+	for i := 0; i < 3; i++ {
+		sendErr = kafka.Send(config.Conf.Data.Kafka.Topic, string(msgBytes))
+		if sendErr == nil {
+			break
+		}
+		time.Sleep(time.Duration(i+1) * 100 * time.Millisecond)
+	}
+	if sendErr != nil {
+		log.Printf("[ERROR] kafka 投递失败，已回滚库存: user=%d product=%d err=%v", userID, productID, sendErr)
 		// 如果 kafka 发送失败, 必须回滚 redis 库存, 暂时简单的手动添加库存, 然后删掉用户的缓存
 		redis.RDB.Incr(ctx, stockKey)
 		redis.RDB.SRem(ctx, userSetKey, userID)
