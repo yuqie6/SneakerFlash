@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { onMounted, ref, computed } from "vue"
 import { useRoute } from "vue-router"
 import MainLayout from "@/layout/MainLayout.vue"
-import ParallaxCard from "@/components/motion/ParallaxCard.vue"
 import MagmaButton from "@/components/motion/MagmaButton.vue"
+import ParallaxCard from "@/components/motion/ParallaxCard.vue"
 import { useProductStore } from "@/stores/productStore"
 import { useSeckill } from "@/composables/useSeckill"
 import { useCountDown } from "@/composables/useCountDown"
@@ -13,103 +13,78 @@ import type { Product } from "@/types/product"
 const route = useRoute()
 const productStore = useProductStore()
 const product = ref<Product | null>(null)
-const loading = ref(false)
-const countdownTarget = ref<Date | string | number>(Date.now())
-
 const { status, resultMsg, executeSeckill } = useSeckill()
-const { formatted, isStarted } = useCountDown(countdownTarget)
-
-const canBuy = computed(() => isStarted.value && (product.value?.stock ?? 0) > 0)
 
 const load = async () => {
-  loading.value = true
-  try {
-    const id = Number(route.params.id)
-    const detail = await productStore.fetchProductDetail(id)
-    product.value = detail
-    countdownTarget.value = detail.start_time
-  } finally {
-    loading.value = false
-  }
+  const id = Number(route.params.id)
+  product.value = await productStore.fetchProductDetail(id)
 }
 
 onMounted(load)
+
+const { formatted, isStarted } = useCountDown(computed(() => product.value?.start_time || Date.now()))
+
+const buttonState = computed(() => {
+  if (!isStarted.value) return "pending"
+  if (status.value === "loading") return "loading"
+  if (status.value === "success") return "success"
+  if (status.value === "failed") return "failed"
+  return "active"
+})
+
+const onSeckill = () => {
+  if (!product.value) return
+  executeSeckill(product.value.id)
+}
 </script>
 
 <template>
   <MainLayout>
-    <div class="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-6 py-12 md:grid-cols-2">
-      <div class="relative">
-        <ParallaxCard class="h-full">
-          <div class="relative flex h-full flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-black via-obsidian-card to-magma/15 p-8">
-            <div class="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(249,115,22,0.15),transparent_35%)]"></div>
-            <div class="relative z-10 flex h-full flex-col justify-between">
-              <div>
-                <p class="text-sm uppercase text-white/60">Sneaker</p>
-                <h2 class="mt-3 text-3xl font-semibold">{{ product?.name || "加载中" }}</h2>
-                <p class="mt-2 text-magma text-lg font-semibold">{{ product ? formatPrice(product.price) : "" }}</p>
-              </div>
-              <div class="mt-8 space-y-2 text-sm text-white/70">
-                <div class="flex items-center justify-between">
-                  <span>库存</span>
-                  <span class="font-semibold text-white">{{ product?.stock ?? "-" }}</span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span>开售时间</span>
-                  <span>{{ product?.start_time }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
+    <section v-if="product" class="mx-auto max-w-6xl px-6 py-12">
+      <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+        <ParallaxCard class="glass">
+          <img :src="product.image || '/placeholder.svg'" alt="" class="h-[420px] w-full rounded-2xl object-cover" />
         </ParallaxCard>
-      </div>
-
-      <div class="space-y-6">
-        <div>
-          <p class="text-xs uppercase text-magma">Product Detail</p>
-          <h1 class="mt-2 text-3xl font-semibold">{{ product?.name || "商品详情" }}</h1>
-          <p class="mt-3 text-white/70">
-            极致流畅的磁吸按钮与物理动效，开售后立即锁定，提前完成准备，提升命中率。
-          </p>
-        </div>
-
-        <div class="rounded-2xl border border-obsidian-border/70 bg-obsidian-card/70 p-6 backdrop-blur-xl">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-white/60">价格</p>
-              <p class="text-2xl font-semibold text-magma">{{ product ? formatPrice(product.price) : "-" }}</p>
+        <div class="space-y-6">
+          <div>
+            <p class="text-sm uppercase tracking-[0.3em] text-magma">Seckill</p>
+            <h1 class="text-3xl font-semibold">{{ product.name }}</h1>
+          </div>
+          <p class="text-2xl font-bold text-magma">{{ formatPrice(product.price) }}</p>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-sm text-white/70">
+              <span>库存</span>
+              <span>{{ product.stock }}</span>
             </div>
-            <div class="text-right">
-              <p class="text-sm text-white/60">状态</p>
-              <p class="text-lg font-semibold">
-                <span v-if="!isStarted">倒计时 {{ formatted }}</span>
-                <span v-else>进行中</span>
-              </p>
+            <div class="h-2 w-full overflow-hidden rounded-full bg-obsidian-border">
+              <div class="h-full bg-magma" :style="{ width: `${product.stock > 0 ? 100 : 0}%` }"></div>
             </div>
           </div>
 
-          <div class="mt-6 space-y-3">
+          <div class="rounded-2xl border border-obsidian-border/80 bg-obsidian-card/80 p-6">
+            <div class="mb-4 flex items-center justify-between text-sm text-white/70">
+              <span>开抢时间</span>
+              <span>{{ new Date(product.start_time).toLocaleString() }}</span>
+            </div>
+            <div class="mb-4 flex items-center gap-3 text-lg font-semibold">
+              <span v-if="!isStarted" class="text-white/70">距离开始</span>
+              <span class="text-magma">{{ isStarted ? "进行中" : formatted }}</span>
+            </div>
             <MagmaButton
               class="w-full justify-center"
               :loading="status === 'loading'"
-              :disabled="!product || !canBuy || status === 'success'"
-              @click="product && executeSeckill(product.id)"
+              :disabled="!isStarted || status === 'success'"
+              @click="onSeckill"
             >
-              <span v-if="!isStarted">倒计时 {{ formatted }}</span>
-              <span v-else-if="status === 'loading'">正在锁定...</span>
-              <span v-else-if="status === 'success'">GOT 'EM</span>
-              <span v-else-if="status === 'failed'">重试抢购</span>
+              <span v-if="buttonState === 'pending'">即将开始 · {{ formatted }}</span>
+              <span v-else-if="buttonState === 'loading'">锁定中...</span>
+              <span v-else-if="buttonState === 'success'">GOT 'EM · {{ resultMsg }}</span>
+              <span v-else-if="buttonState === 'failed'">再试一次 · {{ resultMsg }}</span>
               <span v-else>立即抢购</span>
             </MagmaButton>
-            <p v-if="status === 'success' || status === 'failed'" class="text-center text-sm text-white/70">
-              {{ resultMsg }}
-            </p>
-            <p v-else class="text-center text-xs text-white/50">需要登录后才能下单，未开始时按钮将显示倒计时。</p>
           </div>
         </div>
-
-        <div v-if="loading" class="text-sm text-white/60">正在加载商品信息...</div>
       </div>
-    </div>
+    </section>
   </MainLayout>
 </template>

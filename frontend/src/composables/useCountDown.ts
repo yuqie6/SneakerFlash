@@ -1,8 +1,8 @@
-import { computed, onBeforeUnmount, onMounted, ref, toValue, watch, type MaybeRef } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, toValue, watch, type MaybeRefOrGetter } from "vue"
 
 const toTimestamp = (input: Date | string | number) => new Date(input).getTime()
 
-export function useCountDown(target: MaybeRef<Date | string | number>) {
+export function useCountDown(target: MaybeRefOrGetter<Date | string | number>) {
   const targetTime = ref<number>(toTimestamp(toValue(target)))
   const remaining = ref(0)
   let timer: number | undefined

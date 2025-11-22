@@ -7,6 +7,7 @@ import (
 	"SneakerFlash/internal/repository"
 	"SneakerFlash/internal/service"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,6 +28,14 @@ func NewHttpServer() *gin.Engine {
 
 	// 注册路由
 	r := gin.Default()
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+
 	api := r.Group("/api/v1")
 	{
 		api.POST("/register", userHandler.Register)
