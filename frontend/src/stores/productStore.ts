@@ -23,19 +23,19 @@ export const useProductStore = defineStore("product", {
     detail: (state) => (id: number) => state.detailMap.get(id),
   },
   actions: {
-    async fetchProducts(page = 1, size = 10) {
+    async fetchProducts(page = 1, size = 10, append = false) {
       this.loading = true
       try {
         const res = await api.get<ProductListResponse, ProductListResponse>("/products", { params: { page, size } })
-        this.items = res.data
+        this.items = append ? [...this.items, ...res.data] : res.data
         this.total = res.total
       } finally {
         this.loading = false
       }
     },
-    async fetchProductDetail(id: number): Promise<Product> {
+    async fetchProductDetail(id: number, refresh = false): Promise<Product> {
       const cached = this.detailMap.get(id)
-      if (cached) return cached
+      if (cached && !refresh) return cached
       const res = await api.get<ProductDetailResponse, ProductDetailResponse>(`/product/${id}`)
       this.detailMap.set(id, res.data)
       return res.data

@@ -3,6 +3,8 @@ import Home from "@/views/Home/Index.vue"
 import Login from "@/views/Auth/Login.vue"
 import Register from "@/views/Auth/Register.vue"
 import ProductDetail from "@/views/Product/Detail.vue"
+import ProductPublish from "@/views/Product/Publish.vue"
+import Profile from "@/views/User/Profile.vue"
 import { useUserStore } from "@/stores/userStore"
 
 const router = createRouter({
@@ -12,6 +14,8 @@ const router = createRouter({
     { path: "/login", name: "login", component: Login },
     { path: "/register", name: "register", component: Register },
     { path: "/product/:id", name: "product-detail", component: ProductDetail, props: true },
+    { path: "/products/publish", name: "product-publish", component: ProductPublish, meta: { requiresAuth: true } },
+    { path: "/profile", name: "profile", component: Profile, meta: { requiresAuth: true } },
   ],
 })
 

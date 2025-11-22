@@ -32,6 +32,7 @@ export const useUserStore = defineStore("user", {
         )
         if (res.token) {
           this.setToken(res.token)
+          await this.fetchProfile()
           toast.success("登录成功")
         }
         return res

@@ -5,6 +5,13 @@
 @tailwind utilities;
 
 @layer base {
+  @keyframes shake {
+    10%, 90% { transform: translateX(-2px); }
+    20%, 80% { transform: translateX(3px); }
+    30%, 50%, 70% { transform: translateX(-5px); }
+    40%, 60% { transform: translateX(5px); }
+  }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -27,4 +34,8 @@
 
 .glass {
   @apply bg-black/40 backdrop-blur-xl border border-white/10;
+}
+
+.animate-shake {
+  animation: shake 0.35s ease-in-out 1;
 }
