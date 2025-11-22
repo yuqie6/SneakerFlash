@@ -7,50 +7,50 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig `mapstrcture:"server"`
-	Data   DataConfig   `mapstrcture:"data"`
-	JWT    JWTConfig    `mapstrcture:"jwt"`
+	Server ServerConfig `mapstructure:"server"`
+	Data   DataConfig   `mapstructure:"data"`
 }
 
 type ServerConfig struct {
-	Port string `mapstrcture:"port"`
+	Port string `mapstructure:"port"`
 }
 
 type DataConfig struct {
-	Database DatabaseConfig `mapstrcture:"database"`
-	Redis    RedisConfig    `mapstrcture:"redis"`
-	Kafka    KafkaConfig    `mapstrcture:"kafka"`
+	Database DatabaseConfig `mapstructure:"database"`
+	Redis    RedisConfig    `mapstructure:"redis"`
+	Kafka    KafkaConfig    `mapstructure:"kafka"`
+	JWT      JWTConfig      `mapstructure:"jwt"`
 }
 
 type JWTConfig struct {
-	Secret  string `mapstrcture:"secret"`
-	Expried int    `mapstrcture:"expried"`
+	Secret  string `mapstructure:"secret"`
+	Expried int    `mapstructure:"expried"`
 }
 
 type DatabaseConfig struct {
-	Host        string `mapstrcture:"host"`
-	Port        int    `mapstrcture:"port"`
-	User        string `mapstrcture:"user"`
-	Password    string `mapstrcture:"password"`
-	DBname      string `mapstrcture:"dbname"`
-	LogLever    int    `mapstrcture:"log_lever"`
-	MaxIdle     int    `mapstrcture:"max_idle"`
-	MaxOpen     int    `mapstrcture:"max_open"`
-	MaxLifetime int    `mapstrcture:"max_lifetime"`
+	Host        string `mapstructure:"host"`
+	Port        int    `mapstructure:"port"`
+	User        string `mapstructure:"user"`
+	Password    string `mapstructure:"password"`
+	DBname      string `mapstructure:"dbname"`
+	LogLever    int    `mapstructure:"log_lever"`
+	MaxIdle     int    `mapstructure:"max_idle"`
+	MaxOpen     int    `mapstructure:"max_open"`
+	MaxLifetime int    `mapstructure:"max_lifetime"`
 }
 
 type RedisConfig struct {
-	Addr        string `mapstrcture:"addr"`
-	Password    string `mapstrcture:"password"`
-	DB          int    `mapstrcture:"db"`
-	PoolSize    int    `mapstrcture:"pool_size"`
-	MinIdle     int    `mapstrcture:"min_idle"`
-	ConnTimeout int    `mapstrcture:"conn_timeout"`
+	Addr        string `mapstructure:"addr"`
+	Password    string `mapstructure:"password"`
+	DB          int    `mapstructure:"db"`
+	PoolSize    int    `mapstructure:"pool_size"`
+	MinIdle     int    `mapstructure:"min_idle"`
+	ConnTimeout int    `mapstructure:"conn_timeout"`
 }
 
 type KafkaConfig struct {
-	Brokers []string `mapstrcture:"brokers"`
-	Topic   string   `mapstrcture:"topic"`
+	Brokers []string `mapstructure:"brokers"`
+	Topic   string   `mapstructure:"topic"`
 }
 
 var Conf Config
