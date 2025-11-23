@@ -45,3 +45,11 @@ func (r *UserRepo) GetByID(id uint) (*model.User, error) {
 func (r *UserRepo) UpdatePassword(uid uint, newPassword string) error {
 	return r.db.Model(&model.User{}).Where("id = ?", uid).Update("password", newPassword).Error
 }
+
+// 更新用户基础资料
+func (r *UserRepo) UpdateProfile(uid uint, values map[string]any) error {
+	if len(values) == 0 {
+		return nil
+	}
+	return r.db.Model(&model.User{}).Where("id = ?", uid).Updates(values).Error
+}
