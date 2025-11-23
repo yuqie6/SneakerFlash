@@ -2,6 +2,7 @@ package repository
 
 import (
 	"SneakerFlash/internal/model"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -17,13 +18,35 @@ func NewPaymentRepo(db *gorm.DB) *PaymentRepo {
 	}
 }
 
-// 增加订单
+// 创建支付单
 func (r *PaymentRepo) Create(payment *model.Payment) error {
 	return r.db.Create(payment).Error
 }
 
-// 根据支付号查订单
-func (r *PaymentRepo) GetByPaymentID(pid uint) (*model.Payment, error) {
+// 基于 order_id 幂等创建支付单；已存在则直接返回
+func (r *PaymentRepo) CreateIfAbsent(payment *model.Payment) (*model.Payment, error) {
+	var existing model.Payment
+	err := r.db.Where("order_id = ?", payment.OrderID).First(&existing).Error
+	if err == nil {
+		return &existing, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	if err := r.db.Create(payment).Error; err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			if err := r.db.Where("order_id = ?", payment.OrderID).First(&existing).Error; err == nil {
+				return &existing, nil
+			}
+		}
+		return nil, err
+	}
+	return payment, nil
+}
+
+// 根据支付号查支付单
+func (r *PaymentRepo) GetByPaymentID(pid string) (*model.Payment, error) {
 	var payment model.Payment
 	if err := r.db.Where("payment_id = ?", pid).First(&payment).Error; err != nil {
 		return nil, err
@@ -31,38 +54,40 @@ func (r *PaymentRepo) GetByPaymentID(pid uint) (*model.Payment, error) {
 	return &payment, nil
 }
 
-// 根据订单号查订单
-func (r *PaymentRepo) GetByOrderID(oid uint) (*model.Payment, error) {
+// 根据订单号查支付单（单订单唯一支付单）
+func (r *PaymentRepo) GetByOrderID(orderID uint) (*model.Payment, error) {
 	var payment model.Payment
-	if err := r.db.Where("order_id = ?", oid).First(&payment).Error; err != nil {
+	if err := r.db.Where("order_id = ?", orderID).First(&payment).Error; err != nil {
 		return nil, err
 	}
 	return &payment, nil
 }
 
-// 根据支付id 获取待支付的订单记录
-func (r *PaymentRepo) GetPendingByOrderID(orderID string) (*model.Payment, error) {
+// 按订单号+状态查支付单（状态必填，用于待支付/已支付查询）
+func (r *PaymentRepo) GetByOrderIDAndStatus(orderID uint, status model.PaymentStatus) (*model.Payment, error) {
 	var payment model.Payment
-	if err := r.db.Where("order_id = ? AND status = ?", orderID, model.PaymentStatusPending).First(&payment).Error; err != nil {
+	if err := r.db.Where("order_id = ? AND status = ?", orderID, status).First(&payment).Error; err != nil {
 		return nil, err
 	}
 	return &payment, nil
 }
 
-// 更新订单状态
-func (r *PaymentRepo) UpdateStatus(pid uint, status model.PaymentStatus, notifyData string) error {
+// 条件更新支付状态（按支付号+当前状态），用于回调幂等；返回影响行数
+func (r *PaymentRepo) UpdateStatusByPaymentIDIfMatch(paymentID string, fromStatus model.PaymentStatus, toStatus model.PaymentStatus, notifyData string) (int64, error) {
 	updates := map[string]any{
-		"status":     status,
+		"status":     toStatus,
 		"updated_at": time.Now(),
 	}
 	if notifyData != "" {
 		updates["notify_data"] = notifyData
 	}
-	return r.db.Model(&model.Payment{}).Where("id = ?", pid).Updates(updates).Error
+
+	tx := r.db.Model(&model.Payment{}).Where("payment_id = ? AND status = ?", paymentID, fromStatus).Updates(updates)
+	return tx.RowsAffected, tx.Error
 }
 
-// 根据订单 id 更新状态
-func (r *PaymentRepo) UpdateStatusByPaymentID(paymentID string, status model.PaymentStatus, notifyData string) error {
+// 强制更新支付状态（无状态校验），仅限后台手工修复使用
+func (r *PaymentRepo) ForceUpdateStatusByPaymentID(paymentID string, status model.PaymentStatus, notifyData string) error {
 	updates := map[string]any{
 		"status":     status,
 		"updated_at": time.Now(),
