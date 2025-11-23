@@ -2,6 +2,7 @@
 import { RouterLink, useRouter } from "vue-router"
 import { computed, onMounted } from "vue"
 import { useUserStore } from "@/stores/userStore"
+import { resolveAssetUrl } from "@/lib/api"
 import MagmaButton from "@/components/motion/MagmaButton.vue"
 
 const userStore = useUserStore()
@@ -11,7 +12,7 @@ const isLoggedIn = computed(() => !!userStore.accessToken)
 const username = computed(() => userStore.profile?.username || "Guest")
 const avatar = computed(() => {
   const name = userStore.profile?.username || "guest"
-  return userStore.profile?.avatar || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name)}`
+  return resolveAssetUrl(userStore.profile?.avatar) || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name)}`
 })
 
 const handleLogout = () => {

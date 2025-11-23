@@ -93,3 +93,28 @@ api.interceptors.response.use(
 )
 
 export default api
+
+export async function uploadImage(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  const res = await api.post<{ url: string }, { url: string }>("/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  })
+  return resolveAssetUrl(res.url)
+}
+
+const assetOrigin = (() => {
+  const base = api.defaults.baseURL || window.location.origin
+  try {
+    return new URL(base).origin
+  } catch {
+    return window.location.origin
+  }
+})()
+
+export function resolveAssetUrl(src: string | undefined | null) {
+  if (!src) return ""
+  if (/^https?:\/\//i.test(src) || src.startsWith("data:")) return src
+  if (src.startsWith("/")) return `${assetOrigin}${src}`
+  return `${assetOrigin}/${src}`
+}

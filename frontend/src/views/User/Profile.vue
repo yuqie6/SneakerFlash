@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, watch } from "vue"
+import { computed, onMounted, reactive, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import MainLayout from "@/layout/MainLayout.vue"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -7,6 +7,7 @@ import MagmaButton from "@/components/motion/MagmaButton.vue"
 import { useUserStore } from "@/stores/userStore"
 import { formatPrice } from "@/lib/utils"
 import { toast } from "vue-sonner"
+import { resolveAssetUrl, uploadImage } from "@/lib/api"
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -16,10 +17,15 @@ const form = reactive({
   avatar: "",
 })
 
+const avatarUploading = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+
 const isBusy = computed(() => userStore.loading)
 const avatarPreview = computed(() => {
   const username = userStore.profile?.username || "guest"
-  return form.avatar || userStore.profile?.avatar || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(username)}`
+  const raw = form.avatar || userStore.profile?.avatar
+  const fallback = `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(username)}`
+  return resolveAssetUrl(raw) || fallback
 })
 
 onMounted(() => {
@@ -64,6 +70,24 @@ const resetForm = () => {
   if (!userStore.profile) return
   form.user_name = userStore.profile.username
   form.avatar = userStore.profile.avatar || ""
+}
+
+const onAvatarFileChange = async (event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0]
+  if (!file) return
+
+  avatarUploading.value = true
+  try {
+    const url = await uploadImage(file)
+    form.avatar = url
+    toast.success("头像上传成功")
+  } catch (err: any) {
+    toast.error(err?.message || "上传失败")
+  } finally {
+    avatarUploading.value = false
+    if (target) target.value = ""
+  }
 }
 
 const logout = () => {
@@ -119,7 +143,13 @@ const logout = () => {
                 placeholder="https://example.com/avatar.png"
                 class="w-full rounded-lg border border-obsidian-border/60 bg-black/40 px-3 py-2 text-sm text-white outline-none transition focus:border-magma"
               />
-              <p class="mt-1 text-xs text-white/50">可直接粘贴图片链接，留空将使用默认生成头像。</p>
+              <div class="mt-2 flex flex-wrap items-center gap-3">
+                <MagmaButton :disabled="avatarUploading" class="px-4 py-2" @click="fileInput?.click()">
+                  {{ avatarUploading ? "上传中..." : "上传图片" }}
+                </MagmaButton>
+                <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onAvatarFileChange" />
+                <p class="text-xs text-white/50">可直接粘贴图片链接，或上传文件自动填充。</p>
+              </div>
             </div>
             <div>
               <label class="mb-2 block text-sm text-white/70">用户名</label>

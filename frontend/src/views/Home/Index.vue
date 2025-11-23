@@ -11,6 +11,7 @@ import CountdownPill from "@/components/CountdownPill.vue"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { formatPrice } from "@/lib/utils"
+import { resolveAssetUrl } from "@/lib/api"
 
 const productStore = useProductStore()
 const userStore = useUserStore()
@@ -18,6 +19,10 @@ const pageSize = 12
 const currentPage = computed(() => Math.ceil(productStore.items.length / pageSize) || 1)
 const isLoggedIn = computed(() => !!userStore.accessToken)
 const displayName = computed(() => userStore.profile?.username || "尊贵用户")
+const heroAvatar = computed(() => {
+  const name = userStore.profile?.username || "guest"
+  return resolveAssetUrl(userStore.profile?.avatar) || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name)}`
+})
 
 onMounted(() => {
           productStore.fetchProducts(1, pageSize)
@@ -47,6 +52,8 @@ const safeProduct = (item: any) =>
         start_time: Date.now(),
         image: "/placeholder.svg",
       }
+
+const productCover = (src?: string) => resolveAssetUrl(src) || "/placeholder.svg"
 
 const loadMore = () => {
   const nextPage = currentPage.value + 1
@@ -87,9 +94,7 @@ const loadMore = () => {
             </template>
             <template v-else>
               <div class="flex items-center gap-3 rounded-full border border-obsidian-border/70 px-4 py-2 text-sm text-white/80">
-                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-magma-gradient font-semibold text-white">
-                  {{ displayName.slice(0, 1).toUpperCase() }}
-                </span>
+                <img :src="heroAvatar" alt="avatar" class="h-8 w-8 rounded-full border border-obsidian-border/70 object-cover" />
                 <span>欢迎回来，{{ displayName }}</span>
               </div>
               <RouterLink to="/orders">
@@ -116,7 +121,7 @@ const loadMore = () => {
         <div class="flex-1">
           <ParallaxCard v-if="heroProduct" class="glass">
             <div class="relative h-full w-full overflow-hidden rounded-2xl">
-              <img :src="heroProduct?.image || '/placeholder.svg'" alt="hero" class="h-full w-full object-cover" />
+              <img :src="productCover(heroProduct?.image)" alt="hero" class="h-full w-full object-cover" />
               <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
               <div class="absolute bottom-0 left-0 right-0 p-6">
                 <p class="text-sm text-white/70">当前抢购</p>
@@ -180,7 +185,7 @@ const loadMore = () => {
           <RouterLink :to="`/product/${safeProduct(raw).id}`">
             <div class="relative overflow-hidden">
               <img
-                :src="safeProduct(raw).image || '/placeholder.svg'"
+                :src="productCover(safeProduct(raw).image)"
                 alt=""
                 class="h-52 w-full object-cover transition duration-500 hover:scale-105"
               />

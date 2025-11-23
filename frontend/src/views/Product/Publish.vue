@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { reactive, computed } from "vue"
+import { reactive, computed, ref } from "vue"
 import { useRouter } from "vue-router"
 import MainLayout from "@/layout/MainLayout.vue"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import MagmaButton from "@/components/motion/MagmaButton.vue"
-import api from "@/lib/api"
+import api, { resolveAssetUrl, uploadImage } from "@/lib/api"
 import { toast } from "vue-sonner"
 import { formatPrice } from "@/lib/utils"
 import { useProductStore } from "@/stores/productStore"
@@ -22,13 +22,15 @@ const form = reactive({
 })
 
 const loading = reactive({ submitting: false })
+const uploading = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const preview = computed(() => ({
   name: form.name || "未命名球鞋",
   price: form.price ? Number(form.price) : 0,
   stock: form.stock ? Number(form.stock) : 0,
   start: form.start_time ? new Date(form.start_time).toLocaleString() : "未设置",
-  image: form.image || "/placeholder.svg",
+  image: resolveAssetUrl(form.image) || "/placeholder.svg",
 }))
 
 const submit = async () => {
@@ -58,6 +60,24 @@ const submit = async () => {
     toast.error(err?.message || "发布失败")
   } finally {
     loading.submitting = false
+  }
+}
+
+const onImageSelected = async (event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0]
+  if (!file) return
+
+  uploading.value = true
+  try {
+    const url = await uploadImage(file)
+    form.image = url
+    toast.success("图片上传成功")
+  } catch (err: any) {
+    toast.error(err?.message || "上传失败")
+  } finally {
+    uploading.value = false
+    if (target) target.value = ""
   }
 }
 </script>
@@ -98,6 +118,13 @@ const submit = async () => {
             <div class="space-y-2">
               <label class="text-sm text-white/70">封面图（可选）</label>
               <Input v-model="form.image" type="url" placeholder="https://..." class="bg-obsidian-card" />
+              <div class="flex flex-wrap items-center gap-3 text-xs text-white/60">
+                <MagmaButton :disabled="uploading" class="px-3 py-1.5" @click="fileInput?.click()">
+                  {{ uploading ? "上传中..." : "上传图片" }}
+                </MagmaButton>
+                <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onImageSelected" />
+                <span>可填写外链，或上传图片自动生成链接</span>
+              </div>
             </div>
             <MagmaButton class="w-full justify-center" :loading="loading.submitting" @click="submit">
               发布商品并预热
