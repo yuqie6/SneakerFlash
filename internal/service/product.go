@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 )
@@ -35,7 +36,7 @@ func NewProductService(repo *repository.ProductRepo) *ProductService {
 // 业务 1: 创建商品
 func (s *ProductService) CreateProduct(product *model.Product) error {
 	if err := s.repo.Create(product); err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
+		if errors.Is(err, gorm.ErrDuplicatedKey) || isMySQLDuplicate(err) {
 			return ErrProductDuplicate
 		}
 		return err
@@ -154,4 +155,12 @@ func (s *ProductService) DeleteProduct(userID, id uint) error {
 
 func (s *ProductService) ListUserProducts(userID uint, page, size int) ([]model.Product, int64, error) {
 	return s.repo.ListByUserID(userID, page, size)
+}
+
+func isMySQLDuplicate(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) {
+		return mysqlErr.Number == 1062
+	}
+	return false
 }

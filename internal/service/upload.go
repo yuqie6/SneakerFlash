@@ -23,7 +23,7 @@ func NewUploadService(uploadDir string) *UploadService {
 	}
 	uploadDir = filepath.Clean(uploadDir)
 	// 默认 5MB
-	return &UploadService{uploadDir: uploadDir, maxSize: 5 << 20}
+	return &UploadService{uploadDir: uploadDir, maxSize: 10 << 20}
 }
 
 // SaveImage 保存图片并返回可直接访问的相对路径
