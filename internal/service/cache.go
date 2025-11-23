@@ -6,11 +6,18 @@ import (
 	"fmt"
 )
 
-// syncStockCache 覆盖写入商品库存缓存（秒杀用）
-func syncStockCache(productID uint, stock int) {
+// setStockCache 覆盖写入商品库存缓存（秒杀用）
+func setStockCache(productID uint, stock int) error {
 	ctx := context.Background()
 	key := fmt.Sprintf("product:stock:%d", productID)
-	_ = redis.RDB.Set(ctx, key, stock, 0).Err()
+	return redis.RDB.Set(ctx, key, stock, 0).Err()
+}
+
+// refreshStockCacheAsync 异步刷新库存缓存，忽略错误
+func refreshStockCacheAsync(productID uint, stock int) {
+	go func() {
+		_ = setStockCache(productID, stock)
+	}()
 }
 
 // invalidateProductInfoCache 让详情重新回源数据库

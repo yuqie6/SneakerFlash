@@ -223,7 +223,7 @@ func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.
 		if targetStatus == model.PaymentStatusPaid {
 			if product, pErr := txProductRepo.GetByID(order.ProductID); pErr == nil {
 				// 异步刷新缓存库存
-				go syncStockCache(product.ID, product.Stock)
+				refreshStockCacheAsync(product.ID, product.Stock)
 				go invalidateProductInfoCache(product.ID)
 			}
 		}

@@ -53,11 +53,7 @@ func (s *ProductService) CreateProduct(product *model.Product) error {
 
 // 业务 2: 库存预热(核心)
 func (s *ProductService) SyncStockToRedis(id uint, stock int) error {
-	ctx := context.Background()
-	key := fmt.Sprintf("product:stock:%d", id)
-
-	// 直接覆盖
-	return redis.RDB.Set(ctx, key, stock, 0).Err() // 永不结束
+	return setStockCache(id, stock)
 }
 
 // 业务 3: 获取列表
