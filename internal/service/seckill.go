@@ -82,7 +82,6 @@ func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
 	}
 
 	// 4. 抢到了, 需要给 kafka 消息, 创建订单
-
 	orderNum, err := utils.GenSnowflakeID()
 	if err != nil {
 		return "", ErrSeckillBusy

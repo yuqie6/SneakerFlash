@@ -12,6 +12,8 @@ const (
 
 	// 风控错误 7xx
 	RISK_BLOCKED = 700
+	RISK_LIMITED = 701
+	RISK_BLACK   = 702
 
 	// 用户模块错误 100xx
 	ERROR_EXIST_USER            = 10001
@@ -36,6 +38,8 @@ var Msglags = map[int]string{
 	UNAUTHORIZED:   "未登录或token已失效",
 	RATE_LIMIT:     "请求过于频繁，请稍后再试",
 	RISK_BLOCKED:   "触发风控，暂时无法操作",
+	RISK_LIMITED:   "触发限流，请稍后再试",
+	RISK_BLACK:     "风险校验未通过",
 
 	ERROR_EXIST_USER:            "用户已存在",
 	ERROR_NOT_EXIST_USER:        "用户不存在",
