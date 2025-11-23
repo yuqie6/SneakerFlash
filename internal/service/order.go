@@ -20,6 +20,7 @@ type OrderService struct {
 	db          *gorm.DB
 	orderRepo   *repository.OrderRepo
 	paymentRepo *repository.PaymentRepo
+	productRepo *repository.ProductRepo
 }
 
 type OrderWithPayment struct {
@@ -27,11 +28,12 @@ type OrderWithPayment struct {
 	Payment *model.Payment
 }
 
-func NewOrderService(db *gorm.DB) *OrderService {
+func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo) *OrderService {
 	return &OrderService{
 		db:          db,
 		orderRepo:   repository.NewOrderRepo(db),
 		paymentRepo: repository.NewPaymentRepo(db),
+		productRepo: productRepo,
 	}
 }
 
@@ -124,6 +126,29 @@ func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPaym
 	payment, err := s.paymentRepo.GetByOrderID(orderID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
+	}
+
+	if payment == nil && errors.Is(err, gorm.ErrRecordNotFound) {
+		// 补偿创建支付单，避免页面缺少 payment_id
+		product, pErr := s.productRepo.GetByID(order.ProductID)
+		if pErr != nil {
+			return nil, pErr
+		}
+		amountCents := int64(product.Price * 100)
+		paymentID, genErr := utils.GenSnowflakeID()
+		if genErr != nil {
+			return nil, genErr
+		}
+		newPayment := &model.Payment{
+			OrderID:     order.ID,
+			PaymentID:   paymentID,
+			AmountCents: amountCents,
+			Status:      model.PaymentStatusPending,
+		}
+		if _, cErr := s.paymentRepo.CreateIfAbsent(newPayment); cErr != nil {
+			return nil, cErr
+		}
+		payment = newPayment
 	}
 
 	return &OrderWithPayment{

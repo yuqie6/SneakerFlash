@@ -3,6 +3,7 @@ package service
 import (
 	"SneakerFlash/internal/infra/redis"
 	"SneakerFlash/internal/model"
+	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/repository"
 	"context"
 	"encoding/json"
@@ -17,6 +18,7 @@ type WorkerService struct {
 	db          *gorm.DB
 	productRepo *repository.ProductRepo
 	orderRepo   *repository.OrderRepo
+	paymentRepo *repository.PaymentRepo
 }
 
 func NewWorkerService(db *gorm.DB, productRepo *repository.ProductRepo, order *repository.OrderRepo) *WorkerService {
@@ -24,6 +26,7 @@ func NewWorkerService(db *gorm.DB, productRepo *repository.ProductRepo, order *r
 		db:          db,
 		productRepo: productRepo,
 		orderRepo:   order,
+		paymentRepo: repository.NewPaymentRepo(db),
 	}
 }
 
@@ -61,6 +64,26 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 
 		if err := txOrderRepo.Create(order); err != nil {
 			log.Printf("[ERROR]创建订单失败: %v", err)
+			return err
+		}
+
+		// 创建支付单
+		product, err := txProductRepo.GetByID(msg.ProductID)
+		if err != nil {
+			return err
+		}
+		paymentID, err := utils.GenSnowflakeID()
+		if err != nil {
+			return err
+		}
+		payment := &model.Payment{
+			OrderID:     order.ID,
+			PaymentID:   paymentID,
+			AmountCents: int64(product.Price * 100),
+			Status:      model.PaymentStatusPending,
+		}
+		txPaymentRepo := repository.NewPaymentRepo(tx)
+		if _, err := txPaymentRepo.CreateIfAbsent(payment); err != nil {
 			return err
 		}
 
