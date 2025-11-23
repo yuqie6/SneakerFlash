@@ -17,6 +17,7 @@ type Config struct {
 type ServerConfig struct {
 	Port      string `mapstructure:"port"`
 	MachineID int    `mapstructure:"machineid"`
+	UploadDir string `mapstructure:"upload_dir"`
 }
 
 type DataConfig struct {
