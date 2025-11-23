@@ -28,15 +28,6 @@ func (r *OrderRepo) GetByID(id uint) (*model.Order, error) {
 	return &order, nil
 }
 
-func (r *OrderRepo) GetByOrderNum(orderNum string) (*model.Order, error) {
-	var order model.Order
-	if err := r.db.Where("order_num = ?", orderNum).First(&order).Error; err != nil {
-		return nil, err
-	}
-
-	return &order, nil
-}
-
 func (r *OrderRepo) GetByUserAndProduct(userID, productID uint) (*model.Order, error) {
 	var order model.Order
 	if err := r.db.Where("user_id = ? AND product_id = ?", userID, productID).First(&order).Error; err != nil {

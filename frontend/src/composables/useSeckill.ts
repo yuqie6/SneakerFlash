@@ -24,7 +24,7 @@ export function useSeckill() {
     try {
       const res: any = await api.post("/seckill", { product_id: productId })
       status.value = "success"
-      resultMsg.value = `抢购成功！订单号: ${res.order_num || res?.data?.order_num || ""}`
+      resultMsg.value = `抢购成功！订单号: ${res.order_num || ""}`
       toast.success("GOT 'EM!", { description: "恭喜，您已成功抢购！" })
     } catch (err: any) {
       status.value = "failed"

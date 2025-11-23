@@ -24,8 +24,8 @@ type OrderService struct {
 }
 
 type OrderWithPayment struct {
-	Order   *model.Order
-	Payment *model.Payment
+	Order   *model.Order   `json:"order"`
+	Payment *model.Payment `json:"payment,omitempty"`
 }
 
 func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo) *OrderService {
@@ -165,6 +165,9 @@ func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.
 	}
 
 	var result OrderWithPayment
+	if paymentID == "" {
+		return nil, ErrPaymentNotFound
+	}
 
 	// 事务防脏写
 	// 事务的四大特性
@@ -172,6 +175,7 @@ func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		txPaymentRepo := repository.NewPaymentRepo(tx)
 		txOrderRepo := repository.NewOrderRepo(tx)
+		txProductRepo := repository.NewProductRepo(tx)
 
 		payment, err := txPaymentRepo.GetByPaymentID(paymentID)
 		if err != nil {
@@ -208,7 +212,6 @@ func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.
 		if _, err := txOrderRepo.UpdateStatusIfMatch(payment.OrderID, model.OrderStatusUnpaid, orderStatus); err != nil {
 			return err
 		}
-
 		order, err := txOrderRepo.GetByID(payment.OrderID)
 		if err != nil {
 			return err
@@ -216,6 +219,13 @@ func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.
 		updatedPayment, err := txPaymentRepo.GetByPaymentID(paymentID)
 		if err != nil {
 			return err
+		}
+		if targetStatus == model.PaymentStatusPaid {
+			if product, pErr := txProductRepo.GetByID(order.ProductID); pErr == nil {
+				// 异步刷新缓存库存
+				go syncStockCache(product.ID, product.Stock)
+				go invalidateProductInfoCache(product.ID)
+			}
 		}
 		result = OrderWithPayment{
 			Order:   order,

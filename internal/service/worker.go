@@ -43,6 +43,13 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		txProductRepo := repository.NewProductRepo(tx)
 		txOrderRepo := repository.NewOrderRepo(tx)
 
+		// 幂等：若已存在订单则直接跳过（避免重复扣减库存）
+		if existing, err := txOrderRepo.GetByUserAndProduct(msg.UserID, msg.ProductID); err == nil && existing != nil {
+			return nil
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
 		// 扣减数据库库存
 		rowsAffected, err := txProductRepo.ReduceStockDB(msg.ProductID)
 		if err != nil {
@@ -86,6 +93,9 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		if _, err := txPaymentRepo.CreateIfAbsent(payment); err != nil {
 			return err
 		}
+
+		// 失效商品缓存，确保详情回源最新库存
+		go invalidateProductInfoCache(msg.ProductID)
 
 		log.Printf("[INFO] 创建订单成功: userID: %d productID: %d", msg.UserID, msg.ProductID)
 		return nil

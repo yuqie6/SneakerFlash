@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -127,6 +128,12 @@ func (s *ProductService) GetProductByID(id uint) (*model.Product, error) {
 	product, ok := raw.(*model.Product)
 	if !ok {
 		return nil, fmt.Errorf("invalid product data type")
+	}
+	// 以 redis 实时库存为准，避免详情页显示旧库存
+	if stockStr, err := redis.RDB.Get(ctx, fmt.Sprintf("product:stock:%d", product.ID)).Result(); err == nil {
+		if v, convErr := strconv.Atoi(stockStr); convErr == nil {
+			product.Stock = v
+		}
 	}
 	return product, nil
 }

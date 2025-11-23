@@ -157,7 +157,6 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
-
 	orderWithPayment, err := h.orderSvc.GetOrderWithPayment(userID, uint(id))
 	if err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
