@@ -13,6 +13,8 @@ import { Progress } from "@/components/ui/progress"
 import { formatPrice } from "@/lib/utils"
 import { resolveAssetUrl } from "@/lib/api"
 
+const placeholderImg = "https://dummyimage.com/900x600/0f0f14/ffffff&text=SneakerFlash"
+
 const productStore = useProductStore()
 const userStore = useUserStore()
 const pageSize = 12
@@ -53,7 +55,7 @@ const safeProduct = (item: any) =>
         image: "/placeholder.svg",
       }
 
-const productCover = (src?: string) => resolveAssetUrl(src) || "/placeholder.svg"
+const productCover = (src?: string) => resolveAssetUrl(src) || placeholderImg
 
 const loadMore = () => {
   const nextPage = currentPage.value + 1

@@ -25,12 +25,13 @@ const loading = reactive({ submitting: false })
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
+const placeholderImg = "https://dummyimage.com/900x600/0f0f14/ffffff&text=SneakerFlash"
 const preview = computed(() => ({
   name: form.name || "未命名球鞋",
   price: form.price ? Number(form.price) : 0,
   stock: form.stock ? Number(form.stock) : 0,
   start: form.start_time ? new Date(form.start_time).toLocaleString() : "未设置",
-  image: resolveAssetUrl(form.image) || "/placeholder.svg",
+  image: resolveAssetUrl(form.image) || placeholderImg,
 }))
 
 const submit = async () => {

@@ -3,13 +3,9 @@ import api from "@/lib/api"
 import type { Product } from "@/types/product"
 
 type ProductListResponse = {
-  data: Product[]
+  items: Product[]
   total: number
   page: number
-}
-
-type ProductDetailResponse = {
-  data: Product
 }
 
 export const useProductStore = defineStore("product", {
@@ -27,7 +23,7 @@ export const useProductStore = defineStore("product", {
       this.loading = true
       try {
         const res = await api.get<ProductListResponse, ProductListResponse>("/products", { params: { page, size } })
-        const list = Array.isArray(res?.data) ? res.data : []
+        const list = Array.isArray(res?.items) ? res.items : []
         const total = Number(res?.total) || list.length
         this.items = append ? [...this.items, ...list] : list
         this.total = total
@@ -38,9 +34,9 @@ export const useProductStore = defineStore("product", {
     async fetchProductDetail(id: number, refresh = false): Promise<Product> {
       const cached = this.detailMap.get(id)
       if (cached && !refresh) return cached
-      const res = await api.get<ProductDetailResponse, ProductDetailResponse>(`/product/${id}`)
-      this.detailMap.set(id, res.data)
-      return res.data
+      const res = await api.get<ProductDetailResponse, Product>(`/product/${id}`)
+      this.detailMap.set(id, res)
+      return res
     },
     updateProduct(product: Product) {
       this.detailMap.set(product.id, product)

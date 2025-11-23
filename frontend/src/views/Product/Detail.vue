@@ -11,6 +11,7 @@ import { useSeckill } from "@/composables/useSeckill"
 import { useCountDown } from "@/composables/useCountDown"
 import { formatPrice } from "@/lib/utils"
 import type { Product } from "@/types/product"
+import { resolveAssetUrl } from "@/lib/api"
 import { toast } from "vue-sonner"
 
 const route = useRoute()
@@ -62,6 +63,8 @@ const buttonClass = computed(() => ({
   "animate-shake": status.value === "failed",
 }))
 
+const cover = computed(() => resolveAssetUrl(product.value?.image) || "https://dummyimage.com/900x600/0f0f14/ffffff&text=SneakerFlash")
+
 watch(
   () => status.value,
   (val) => {
@@ -82,7 +85,7 @@ watch(
       <div v-if="product" class="relative grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <div class="relative">
           <ParallaxCard class="glass">
-            <img :src="product.image || '/placeholder.svg'" alt="" class="h-[460px] w-full rounded-2xl object-cover" />
+            <img :src="cover" alt="" class="h-[460px] w-full rounded-2xl object-cover" />
           </ParallaxCard>
           <div
             v-if="isLoading"
