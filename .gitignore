@@ -1,4 +1,30 @@
+# 配置文件
 config.yml
-data
+*.env
+.env.*
+
+# Docker相关
 docker-compose.yaml
+docker-compose.override.yaml
+
+# 数据目录
+data
 uploads
+
+# IDE和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 临时文件
+tmp/
+temp/
