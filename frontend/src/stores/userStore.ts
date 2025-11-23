@@ -58,8 +58,8 @@ export const useUserStore = defineStore("user", {
     async fetchProfile() {
       if (!this.accessToken) return
       try {
-        const res = await api.get<{ data: User }, { data: User }>("/profile")
-        this.profile = res.data
+        const res = await api.get<User, User>("/profile")
+        this.profile = res
       } catch {
         this.setTokens("")
         this.profile = null
@@ -70,6 +70,16 @@ export const useUserStore = defineStore("user", {
       type RefreshResp = { access_token: string; expires_in: number }
       const res = (await api.post<RefreshResp>("/refresh", { refresh_token: this.refreshToken })) as unknown as RefreshResp
       if (res.access_token) this.setTokens(res.access_token)
+    },
+    async updateProfile(payload: { user_name?: string; avatar?: string }) {
+      this.loading = true
+      try {
+        const res = await api.put<User, User>("/profile", payload)
+        this.profile = res
+        toast.success("资料已更新")
+      } finally {
+        this.loading = false
+      }
     },
     logout() {
       this.setTokens("")

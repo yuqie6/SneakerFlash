@@ -9,6 +9,10 @@ const router = useRouter()
 
 const isLoggedIn = computed(() => !!userStore.accessToken)
 const username = computed(() => userStore.profile?.username || "Guest")
+const avatar = computed(() => {
+  const name = userStore.profile?.username || "guest"
+  return userStore.profile?.avatar || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name)}`
+})
 
 const handleLogout = () => {
   userStore.logout()
@@ -47,8 +51,12 @@ onMounted(() => {
           <RouterLink v-if="!isLoggedIn" class="transition hover:text-white" to="/register">注册</RouterLink>
         </nav>
         <div class="flex items-center gap-3">
-          <div class="rounded-full border border-obsidian-border/80 bg-obsidian-card/80 px-3 py-1 text-xs text-white/70">
-            {{ username }}
+          <div
+            v-if="isLoggedIn"
+            class="flex items-center gap-2 rounded-full border border-obsidian-border/80 bg-obsidian-card/80 px-3 py-1 text-xs text-white/70"
+          >
+            <img :src="avatar" alt="avatar" class="h-8 w-8 rounded-full border border-obsidian-border/70 object-cover" />
+            <span class="font-medium text-white">{{ username }}</span>
           </div>
           <MagmaButton v-if="!isLoggedIn" class="px-4 py-2 text-sm" @click="router.push('/login')">立即登录</MagmaButton>
           <button
