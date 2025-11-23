@@ -56,7 +56,7 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 			UserID:    msg.UserID,
 			ProductID: msg.ProductID,
 			OrderNum:  msg.OrderNum,
-			Status:    model.StatusUpaid,
+			Status:    model.OrderStatusUnpaid,
 		}
 
 		if err := txOrderRepo.Create(order); err != nil {

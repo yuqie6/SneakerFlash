@@ -7,9 +7,9 @@ import (
 type OrderStatus int
 
 const (
-	StatusUpaid  OrderStatus = 0
-	statusPaid   OrderStatus = 1
-	statusFailed OrderStatus = 2
+	OrderStatusUnpaid OrderStatus = 0
+	OrderStatusPaid   OrderStatus = 1
+	OrderStatusFailed OrderStatus = 2
 )
 
 type Order struct {
