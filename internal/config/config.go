@@ -12,6 +12,7 @@ type Config struct {
 	Server ServerConfig `mapstructure:"server"`
 	Data   DataConfig   `mapstructure:"data"`
 	JWT    JWTConfig    `mapstructure:"jwt"`
+	Risk   RiskConfig   `mapstructure:"risk"`
 }
 
 type ServerConfig struct {
