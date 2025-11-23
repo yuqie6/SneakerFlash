@@ -4,10 +4,10 @@ import (
 	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/db"
 	"SneakerFlash/internal/handler"
+	"SneakerFlash/internal/infra/redis"
 	"SneakerFlash/internal/middlerware"
 	"SneakerFlash/internal/repository"
 	"SneakerFlash/internal/service"
-	"SneakerFlash/internal/infra/redis"
 	"net/http"
 
 	"github.com/gin-contrib/cors"
@@ -66,12 +66,7 @@ func NewHttpServer() *gin.Engine {
 	{
 		api.POST("/register", userHandler.Register)
 		if config.Conf.Risk.Enable {
-			loginLimit := middlerware.InterfaceLimiter(redis.RDB, middlerware.LimitConfig{
-				KeyPrefix: "rl:login",
-				Rate:      config.Conf.Risk.LoginRate.Rate,
-				Burst:     config.Conf.Risk.LoginRate.Burst,
-				TTL:       60,
-			}, "登录过于频繁，请稍后再试")
+			loginLimit := middlerware.InterfaceLimiter(redis.RDB, middlerware.BuildLimit(config.Conf.Risk.LoginRate, "rl:login", 60), "登录过于频繁，请稍后再试")
 			api.POST("/login", loginLimit, userHandler.Login)
 		} else {
 			api.POST("/login", userHandler.Login)
@@ -83,12 +78,7 @@ func NewHttpServer() *gin.Engine {
 
 		// 支付回调（示例）
 		if config.Conf.Risk.Enable {
-			payLimit := middlerware.InterfaceLimiter(redis.RDB, middlerware.LimitConfig{
-				KeyPrefix: "rl:pay",
-				Rate:      config.Conf.Risk.PayRate.Rate,
-				Burst:     config.Conf.Risk.PayRate.Burst,
-				TTL:       60,
-			}, "支付请求过于频繁")
+			payLimit := middlerware.InterfaceLimiter(redis.RDB, middlerware.BuildLimit(config.Conf.Risk.PayRate, "rl:pay", 60), "支付请求过于频繁")
 			api.POST("/payment/callback", payLimit, orderHandler.PaymentCallback)
 		} else {
 			api.POST("/payment/callback", orderHandler.PaymentCallback)
@@ -108,18 +98,8 @@ func NewHttpServer() *gin.Engine {
 		auth.GET("/products/mine", productHandler.ListMyProducts)
 
 		if config.Conf.Risk.Enable {
-			seckillLimit := middlerware.InterfaceLimiter(redis.RDB, middlerware.LimitConfig{
-				KeyPrefix: "rl:seckill",
-				Rate:      config.Conf.Risk.SeckillRate.Rate,
-				Burst:     config.Conf.Risk.SeckillRate.Burst,
-				TTL:       30,
-			}, "秒杀过于频繁，请稍后再试")
-			paramLimit := middlerware.ParamLimiter(redis.RDB, middlerware.LimitConfig{
-				KeyPrefix: "rl:hot:product",
-				Rate:      config.Conf.Risk.ProductRate.Rate,
-				Burst:     config.Conf.Risk.ProductRate.Burst,
-				TTL:       30,
-			}, "product_id", "该商品访问过于频繁，请稍后再试")
+			seckillLimit := middlerware.InterfaceLimiter(redis.RDB, middlerware.BuildLimit(config.Conf.Risk.SeckillRate, "rl:seckill", 30), "秒杀过于频繁，请稍后再试")
+			paramLimit := middlerware.ParamLimiter(redis.RDB, middlerware.BuildLimit(config.Conf.Risk.ProductRate, "rl:hot:product", 30), "product_id", "该商品访问过于频繁，请稍后再试")
 			auth.POST("/seckill", seckillLimit, paramLimit, seckillHandler.Seckill)
 		} else {
 			auth.POST("/seckill", seckillHandler.Seckill)

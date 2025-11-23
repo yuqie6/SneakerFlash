@@ -149,11 +149,11 @@ func clientIP(c *gin.Context) string {
 }
 
 // Helper 根据配置生成接口限流配置
-func buildLimit(rateCfg config.RateLimitConfig, prefix string) LimitConfig {
+func BuildLimit(rateCfg config.RateLimitConfig, prefix string, ttl int) LimitConfig {
 	return LimitConfig{
 		KeyPrefix: prefix,
 		Rate:      rateCfg.Rate,
 		Burst:     rateCfg.Burst,
-		TTL:       120,
+		TTL:       ttl,
 	}
 }
