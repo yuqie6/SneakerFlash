@@ -1,8 +1,8 @@
 # SneakerFlash 前端执行方案（Midnight Magma Ver.）
 
 ## 目标与约束
-- 目标：打造暗夜黑金风格的高并发秒杀前端，交互对标 Apple，优先流畅性与可感知的物理动效。
-- 约束：对接现有后端（`docs/backend-api.md`），业务范围仅含注册/登录、商品列表与详情、秒杀下单（无支付流）。遵循 KISS/YAGNI：不提前接入未提供的接口。
+- 目标：打造暗夜黑金风格的高并发秒杀/下单前端，交互流畅、状态透明（库存、下单、支付状态）。
+- 约束：对接当前后端接口（`docs/backend-api.md`），覆盖注册/登录/刷新、商品列表与详情、发布/管理商品、秒杀、订单与支付状态查看。遵循 KISS/YAGNI：仅落地已有接口，不预留未实现功能。
 
 ## 技术栈与初始化
 - Vue 3 + TypeScript + Vite 5（Script Setup）
@@ -38,18 +38,21 @@ src/
 
 ## API 对接要点
 - BaseURL：`http://localhost:8000/api/v1`
-- 鉴权：`Authorization: Bearer <token>`，Token 存于 `localStorage` 键 `jwt_token`
-- 接口：
-  - 注册 `POST /register`，登录 `POST /login` → 返回 `token`
-  - 个人信息 `GET /profile`（鉴权）
-  - 列表 `GET /products?page&size`；详情 `GET /product/:id`
-  - 秒杀 `POST /seckill {product_id}` → `code=200` 成功、`code=500` 业务失败
-- 响应包装：Axios 拦截器处理 401（清 token 跳登录）与业务码；toast 展示错误。
+- 鉴权：`Authorization: Bearer <access_token>`；`refresh_token` 备用。存储键建议 `sf_access_token` / `sf_refresh_token`
+- 接口（核心）：
+  - 认证：`POST /register`，`POST /login`（返回 access/refresh/expires_in），`POST /refresh`
+  - 用户：`GET /profile`，`PUT /profile`
+  - 上传：`POST /upload`（multipart）
+  - 商品：`GET /products`，`GET /product/:id`，`POST /products`，`PUT /products/:id`，`DELETE /products/:id`，`GET /products/mine`
+  - 秒杀：`POST /seckill {product_id}`
+  - 订单：`POST /orders {product_id}`，`GET /orders`，`GET /orders/:id`（含支付单）
+- 响应包装：后端统一 `{code,msg,data}`；Axios 拦截器处理 `code!=200`、401 自动跳登录，必要时用 refresh_token 重试一次，再失败清理态并跳转。toast 显示业务错误与限流/黑名单提示。
 
 ## 核心业务流
-- `useSeckill`：状态机 `idle/loading/success/failed`；调用 `/seckill`；成功展示 order_num；失败吐司 + 状态。
+- `useSeckill`：状态机 `idle/loading/success/failed`；调用 `/seckill`；成功展示 `order_num`；按业务码提示售罄/重复/限流。
+- 下单/支付：详情页支持 `/orders` 下单，拿到 `payment_id/status/amount_cents`；显示“待支付/已支付/失败”态，支付成功后刷新库存与订单列表。
 - 倒计时：`useCountDown(start_time)` 返回剩余秒、`isStarted`；未开始按钮禁用显示 `MM:SS`。
-- 轮询库存：详情页可选 3-5s 轮询 `GET /product/:id`，并更新库存条。
+- 库存/订单轮询：详情页可选 3-5s 轮询 `GET /product/:id`；订单详情可 5-10s 轮询支付状态（pending→paid/failed）。
 - 路由守卫：访问需要登录的操作（详情页抢购、下单）缺 token 时重定向 `/login`。
 
 ## 开发里程碑
@@ -60,7 +63,8 @@ src/
 5) 页面：
    - Auth：玻璃态表单，登录成功存 token 跳首页。
    - Home：Hero + 瀑布流列表，Hover 3D 倾斜，库存条、倒计时。
-   - Product Detail：左右分栏，按钮状态（Pending/Active/Loading/Result），结果动画（confetti/shake），可选库存轮询。
+   - Product Detail：左右分栏，按钮状态（Pending/Active/Loading/Result），结果动画（confetti/shake），可选库存轮询，支持秒杀/下单入口。
+   - Orders：列表（分页、状态筛选）、详情展示订单+支付状态。
 6) 体验：引入 Motion-v + Lenis，全局 toast provider，焦点态/加载遮罩。
 
 ## 测试与验证
