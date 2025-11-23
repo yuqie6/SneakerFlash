@@ -1,6 +1,7 @@
 package server
 
 import (
+	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/db"
 	"SneakerFlash/internal/handler"
 	"SneakerFlash/internal/middlerware"
@@ -22,12 +23,14 @@ func NewHttpServer() *gin.Engine {
 	productServicer := service.NewProductService(productRepo)
 	seckillServicer := service.NewSeckillService()
 	orderServicer := service.NewOrderService(db.DB)
+	uploadServicer := service.NewUploadService(config.Conf.Server.UploadDir)
 
 	// handler 层
 	userHandler := handler.NewUserHandler(userServicer)
 	productHandler := handler.NewProductHandler(productServicer)
 	seckillHandler := handler.NewSeckillHandler(seckillServicer)
 	orderHandler := handler.NewOrderHandler(orderServicer, productServicer)
+	uploadHandler := handler.NewUploadHandler(uploadServicer)
 
 	// 注册路由
 	r := gin.New()
@@ -44,6 +47,11 @@ func NewHttpServer() *gin.Engine {
 		},
 		AllowWebSockets: true,
 	}))
+	uploadDir := config.Conf.Server.UploadDir
+	if uploadDir == "" {
+		uploadDir = "uploads"
+	}
+	r.Static("/uploads", uploadDir)
 
 	// 处理预检请求
 	r.OPTIONS("/*path", func(c *gin.Context) {
@@ -68,6 +76,7 @@ func NewHttpServer() *gin.Engine {
 	{
 		auth.GET("/profile", userHandler.GetProfile)
 		auth.PUT("/profile", userHandler.UpdateProfile)
+		auth.POST("/upload", uploadHandler.UploadImage)
 
 		auth.POST("/products", productHandler.Create)
 

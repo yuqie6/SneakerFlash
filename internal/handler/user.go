@@ -32,7 +32,7 @@ type RefreshReq struct {
 
 type UpdateProfileReq struct {
 	Username *string `json:"user_name" binding:"omitempty,min=1,max=50"`
-	Avatar   *string `json:"avatar" binding:"omitempty,url"`
+	Avatar   *string `json:"avatar" binding:"omitempty"`
 }
 
 // 用户注册接口

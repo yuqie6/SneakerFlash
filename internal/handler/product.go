@@ -41,7 +41,18 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		return
 	}
 
-	startTime, err := time.Parse("2006-01-02 15:04:05", req.StartTime)
+	layouts := []string{time.RFC3339, "2006-01-02 15:04:05"}
+	var startTime time.Time
+	var err error
+	for _, layout := range layouts {
+		if t, parseErr := time.Parse(layout, req.StartTime); parseErr == nil {
+			startTime = t
+			err = nil
+			break
+		} else {
+			err = parseErr
+		}
+	}
 	if err != nil || !startTime.After(time.Now()) {
 		appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "开始时间必须晚于当前时间")
 		return
