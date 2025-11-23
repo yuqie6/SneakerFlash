@@ -36,17 +36,6 @@ func (r *ProductRepo) GetByIDAndUser(id, userID uint) (*model.Product, error) {
 	return &p, nil
 }
 
-// 根据 ID 获取商品的库存, 预热redis
-func (r *ProductRepo) GetStock(id uint) (int, error) {
-	var p model.Product
-
-	if err := r.db.Select("stock").First(&p, id).Error; err != nil {
-		return 0, err
-	}
-
-	return p.Stock, nil
-}
-
 // 商品库存减少函数
 func (r *ProductRepo) ReduceStockDB(id uint) (int64, error) {
 	result := r.db.Model(&model.Product{}).

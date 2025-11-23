@@ -57,11 +57,6 @@ func (r *OrderRepo) ListByUserID(uid uint, status *model.OrderStatus, page, page
 	return orders, total, err
 }
 
-// 更新订单的状态(待支付 -> 已支付)
-func (r *OrderRepo) UpdateStatus(orderID uint, status model.OrderStatus) error {
-	return r.db.Model(&model.Order{}).Where("id = ?", orderID).Update("status", status).Error
-}
-
 // 按当前状态更新订单状态，避免重复回调覆盖
 func (r *OrderRepo) UpdateStatusIfMatch(orderID uint, fromStatus, toStatus model.OrderStatus) (int64, error) {
 	tx := r.db.Model(&model.Order{}).Where("id = ? AND status = ?", orderID, fromStatus).Update("status", toStatus)

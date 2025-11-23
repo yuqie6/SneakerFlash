@@ -18,11 +18,6 @@ func NewPaymentRepo(db *gorm.DB) *PaymentRepo {
 	}
 }
 
-// 创建支付单
-func (r *PaymentRepo) Create(payment *model.Payment) error {
-	return r.db.Create(payment).Error
-}
-
 // 基于 order_id 幂等创建支付单；已存在则直接返回
 func (r *PaymentRepo) CreateIfAbsent(payment *model.Payment) (*model.Payment, error) {
 	var existing model.Payment
@@ -63,15 +58,6 @@ func (r *PaymentRepo) GetByOrderID(orderID uint) (*model.Payment, error) {
 	return &payment, nil
 }
 
-// 按订单号+状态查支付单（状态必填，用于待支付/已支付查询）
-func (r *PaymentRepo) GetByOrderIDAndStatus(orderID uint, status model.PaymentStatus) (*model.Payment, error) {
-	var payment model.Payment
-	if err := r.db.Where("order_id = ? AND status = ?", orderID, status).First(&payment).Error; err != nil {
-		return nil, err
-	}
-	return &payment, nil
-}
-
 // 条件更新支付状态（按支付号+当前状态），用于回调幂等；返回影响行数
 func (r *PaymentRepo) UpdateStatusByPaymentIDIfMatch(paymentID string, fromStatus model.PaymentStatus, toStatus model.PaymentStatus, notifyData string) (int64, error) {
 	updates := map[string]any{
@@ -84,16 +70,4 @@ func (r *PaymentRepo) UpdateStatusByPaymentIDIfMatch(paymentID string, fromStatu
 
 	tx := r.db.Model(&model.Payment{}).Where("payment_id = ? AND status = ?", paymentID, fromStatus).Updates(updates)
 	return tx.RowsAffected, tx.Error
-}
-
-// 强制更新支付状态（无状态校验），仅限后台手工修复使用
-func (r *PaymentRepo) ForceUpdateStatusByPaymentID(paymentID string, status model.PaymentStatus, notifyData string) error {
-	updates := map[string]any{
-		"status":     status,
-		"updated_at": time.Now(),
-	}
-	if notifyData != "" {
-		updates["notify_data"] = notifyData
-	}
-	return r.db.Model(&model.Payment{}).Where("payment_id = ?", paymentID).Updates(updates).Error
 }
