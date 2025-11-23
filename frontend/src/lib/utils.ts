@@ -6,6 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatPrice(price: number) {
-  if (Number.isNaN(price)) return "¥0.00"
-  return price.toLocaleString("zh-CN", { style: "currency", currency: "CNY" })
+  const n = Number(price)
+  if (!Number.isFinite(n)) return "¥0.00"
+  return n.toLocaleString("zh-CN", { style: "currency", currency: "CNY" })
 }

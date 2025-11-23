@@ -9,3 +9,10 @@ export interface Order {
   created_at?: string
   updated_at?: string
 }
+
+import type { Payment } from "./payment"
+
+export interface OrderWithPayment {
+  order: Order
+  payment?: Payment
+}

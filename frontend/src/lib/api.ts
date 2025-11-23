@@ -6,25 +6,87 @@ const api = axios.create({
   timeout: 10000,
 })
 
+let isRefreshing = false
+let refreshQueue: Array<(token: string | null) => void> = []
+
+const getAccessToken = () => localStorage.getItem("access_token")
+const getRefreshToken = () => localStorage.getItem("refresh_token")
+const setAccessToken = (token: string) => localStorage.setItem("access_token", token)
+const clearTokens = () => {
+  localStorage.removeItem("access_token")
+  localStorage.removeItem("refresh_token")
+}
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("jwt_token")
+  const token = getAccessToken()
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
 api.interceptors.response.use(
   (response) => {
-    if (response.data?.code && response.data.code !== 200) {
-      return Promise.reject(new Error(response.data.msg || "操作失败"))
+    const payload = response.data
+    if (payload?.code !== undefined) {
+      if (payload.code !== 200) {
+        return Promise.reject(new Error(payload.msg || "操作失败"))
+      }
+      return payload.data
     }
-    return response.data
+    return payload
   },
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("jwt_token")
-      window.location.href = "/login"
+  async (error) => {
+    const { response, config } = error
+    const originalRequest = config
+
+    if (response?.status === 401) {
+      const refreshToken = getRefreshToken()
+      if (!refreshToken) {
+        clearTokens()
+        window.location.href = "/login"
+        return Promise.reject(error)
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          refreshQueue.push((token) => {
+            if (!token) {
+              reject(error)
+              return
+            }
+            originalRequest.headers.Authorization = `Bearer ${token}`
+            resolve(api(originalRequest))
+          })
+        })
+      }
+
+      isRefreshing = true
+      try {
+        const res = await axios.post(
+          `${api.defaults.baseURL}/refresh`,
+          { refresh_token: refreshToken },
+          { timeout: 8000 }
+        )
+        const newToken = res.data?.access_token
+        if (!newToken) {
+          throw new Error("刷新失败")
+        }
+        setAccessToken(newToken)
+        refreshQueue.forEach((cb) => cb(newToken))
+        refreshQueue = []
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        return api(originalRequest)
+      } catch (refreshErr) {
+        clearTokens()
+        refreshQueue.forEach((cb) => cb(null))
+        refreshQueue = []
+        window.location.href = "/login"
+        return Promise.reject(refreshErr)
+      } finally {
+        isRefreshing = false
+      }
     }
-    const msg = error.response?.data?.error || error.message || "系统繁忙"
+
+    const msg = response?.data?.error || response?.data?.msg || error.message || "系统繁忙"
     toast.error(msg)
     return Promise.reject(error)
   }

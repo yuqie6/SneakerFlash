@@ -10,28 +10,34 @@ type LoginPayload = {
 
 export const useUserStore = defineStore("user", {
   state: () => ({
-    token: localStorage.getItem("jwt_token") || "",
+    accessToken: localStorage.getItem("access_token") || localStorage.getItem("jwt_token") || "",
+    refreshToken: localStorage.getItem("refresh_token") || "",
     profile: null as User | null,
     loading: false,
   }),
   actions: {
-    setToken(token: string) {
-      this.token = token
-      if (token) {
-        localStorage.setItem("jwt_token", token)
+    setTokens(access: string, refresh?: string) {
+      this.accessToken = access
+      if (refresh) this.refreshToken = refresh
+      if (access) {
+        localStorage.setItem("access_token", access)
       } else {
-        localStorage.removeItem("jwt_token")
+        localStorage.removeItem("access_token")
+      }
+      if (refresh) {
+        localStorage.setItem("refresh_token", refresh)
+      } else if (!access) {
+        localStorage.removeItem("refresh_token")
       }
     },
     async login(payload: LoginPayload) {
       this.loading = true
       try {
-        const res = await api.post<{ msg: string; token: string }, { msg: string; token: string }>(
-          "/login",
-          payload
-        )
-        if (res.token) {
-          this.setToken(res.token)
+        type LoginResp = { access_token: string; refresh_token: string; expires_in: number }
+        const res = (await api.post<LoginResp>("/login", payload)) as unknown as LoginResp
+
+        if (res.access_token) {
+          this.setTokens(res.access_token, res.refresh_token)
           await this.fetchProfile()
           toast.success("登录成功")
         }
@@ -50,17 +56,23 @@ export const useUserStore = defineStore("user", {
       }
     },
     async fetchProfile() {
-      if (!this.token) return
+      if (!this.accessToken) return
       try {
         const res = await api.get<{ data: User }, { data: User }>("/profile")
         this.profile = res.data
       } catch {
-        this.setToken("")
+        this.setTokens("")
         this.profile = null
       }
     },
+    async refreshTokenIfNeeded() {
+      if (!this.refreshToken) return
+      type RefreshResp = { access_token: string; expires_in: number }
+      const res = (await api.post<RefreshResp>("/refresh", { refresh_token: this.refreshToken })) as unknown as RefreshResp
+      if (res.access_token) this.setTokens(res.access_token)
+    },
     logout() {
-      this.setToken("")
+      this.setTokens("")
       this.profile = null
     },
   },

@@ -7,7 +7,7 @@ import MagmaButton from "@/components/motion/MagmaButton.vue"
 const userStore = useUserStore()
 const router = useRouter()
 
-const isLoggedIn = computed(() => !!userStore.token)
+const isLoggedIn = computed(() => !!userStore.accessToken)
 const username = computed(() => userStore.profile?.username || "Guest")
 
 const handleLogout = () => {
@@ -16,7 +16,7 @@ const handleLogout = () => {
 }
 
 onMounted(() => {
-  if (userStore.token && !userStore.profile) {
+  if (userStore.accessToken && !userStore.profile) {
     userStore.fetchProfile()
   }
 })
@@ -40,6 +40,7 @@ onMounted(() => {
         </RouterLink>
         <nav class="flex items-center gap-4 text-sm text-white/80">
           <RouterLink class="transition hover:text-white" to="/">抢购大厅</RouterLink>
+          <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/orders">订单中心</RouterLink>
           <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/products/publish">发布商品</RouterLink>
           <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/profile">个人中心</RouterLink>
           <RouterLink v-if="!isLoggedIn" class="transition hover:text-white" to="/login">登录</RouterLink>

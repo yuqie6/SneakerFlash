@@ -27,8 +27,10 @@ export const useProductStore = defineStore("product", {
       this.loading = true
       try {
         const res = await api.get<ProductListResponse, ProductListResponse>("/products", { params: { page, size } })
-        this.items = append ? [...this.items, ...res.data] : res.data
-        this.total = res.total
+        const list = Array.isArray(res?.data) ? res.data : []
+        const total = Number(res?.total) || list.length
+        this.items = append ? [...this.items, ...list] : list
+        this.total = total
       } finally {
         this.loading = false
       }
