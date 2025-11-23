@@ -14,6 +14,8 @@ export const useProductStore = defineStore("product", {
     total: 0,
     loading: false,
     detailMap: new Map<number, Product>(),
+    myItems: [] as Product[],
+    myTotal: 0,
   }),
   getters: {
     detail: (state) => (id: number) => state.detailMap.get(id),
@@ -42,6 +44,29 @@ export const useProductStore = defineStore("product", {
       this.detailMap.set(product.id, product)
       const idx = this.items.findIndex((p) => p.id === product.id)
       if (idx >= 0) this.items[idx] = product
+    },
+    async fetchMyProducts(page = 1, size = 10) {
+      this.loading = true
+      try {
+        const res = await api.get<{ items: Product[]; total: number; page: number }, { items: Product[]; total: number; page: number }>(
+          "/products/mine",
+          { params: { page, size } }
+        )
+        this.myItems = res.items || []
+        this.myTotal = Number(res.total) || this.myItems.length
+      } finally {
+        this.loading = false
+      }
+    },
+    async updateProductRemote(id: number, payload: Partial<Product>) {
+      await api.put(`/products/${id}`, payload)
+      await this.fetchMyProducts()
+      await this.fetchProducts(1, 12)
+    },
+    async deleteProduct(id: number) {
+      await api.delete(`/products/${id}`)
+      await this.fetchMyProducts()
+      await this.fetchProducts(1, 12)
     },
   },
 })
