@@ -30,6 +30,11 @@ type RefreshReq struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
+type UpdateProfileReq struct {
+	Username *string `json:"user_name" binding:"omitempty,min=1,max=50"`
+	Avatar   *string `json:"avatar" binding:"omitempty,url"`
+}
+
 // 用户注册接口
 func (h *UserHandler) Register(c *gin.Context) {
 	appG := app.Gin{C: c}
@@ -127,4 +132,37 @@ func (h *UserHandler) Refresh(c *gin.Context) {
 		"access_token": token,
 		"expires_in":   config.Conf.JWT.Expried,
 	})
+}
+
+// 更新个人信息
+func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	appG := app.Gin{C: c}
+	userID, exists := c.Get("userID")
+	if !exists {
+		appG.Error(http.StatusUnauthorized, e.ERROR_NOT_EXIST_USER)
+		return
+	}
+
+	var req UpdateProfileReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	if req.Username == nil && req.Avatar == nil {
+		appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "请提供要更新的字段")
+		return
+	}
+
+	user, err := h.svc.UpdateProfile(userID.(uint), req.Username, req.Avatar)
+	switch {
+	case errors.Is(err, service.ErrUserExited):
+		appG.Error(http.StatusOK, e.ERROR_EXIST_USER)
+		return
+	case err != nil:
+		appG.Error(http.StatusInternalServerError, e.ERROR)
+		return
+	}
+
+	appG.Success(user)
 }

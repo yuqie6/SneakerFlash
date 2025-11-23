@@ -67,6 +67,7 @@ func NewHttpServer() *gin.Engine {
 	auth.Use(middlerware.JWTauth())
 	{
 		auth.GET("/profile", userHandler.GetProfile)
+		auth.PUT("/profile", userHandler.UpdateProfile)
 
 		auth.POST("/products", productHandler.Create)
 
