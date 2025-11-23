@@ -21,11 +21,13 @@ func NewHttpServer() *gin.Engine {
 	userServicer := service.NewUserService(userRepo)
 	productServicer := service.NewProductService(productRepo)
 	seckillServicer := service.NewSeckillService()
+	orderServicer := service.NewOrderService(db.DB)
 
 	// handler 层
 	userHandler := handler.NewUserHandler(userServicer)
 	productHandler := handler.NewProductHandler(productServicer)
 	seckillHandler := handler.NewSeckillHandler(seckillServicer)
+	orderHandler := handler.NewOrderHandler(orderServicer, productServicer)
 
 	// 注册路由
 	r := gin.New()
@@ -56,6 +58,9 @@ func NewHttpServer() *gin.Engine {
 
 		api.GET("/products", productHandler.ListProducts)
 		api.GET("/product/:id", productHandler.GetProduct)
+
+		// 支付回调（示例）
+		api.POST("/payment/callback", orderHandler.PaymentCallback)
 	}
 
 	auth := api.Group("/")
@@ -66,6 +71,10 @@ func NewHttpServer() *gin.Engine {
 		auth.POST("/products", productHandler.Create)
 
 		auth.POST("/seckill", seckillHandler.Seckill)
+
+		auth.POST("/orders", orderHandler.CreateOrder)
+		auth.GET("/orders", orderHandler.ListOrders)
+		auth.GET("/orders/:id", orderHandler.GetOrder)
 	}
 	return r
 }

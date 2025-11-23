@@ -113,7 +113,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	}
 
 	appG.Success(gin.H{
-		"data":  list,
+		"items": list,
 		"total": total,
 		"page":  page,
 	})
