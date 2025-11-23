@@ -27,6 +27,14 @@ type CreateProductReq struct {
 	Image     string  `json:"image"`
 }
 
+type UpdateProductReq struct {
+	Name      *string  `json:"name" binding:"omitempty"`
+	Price     *float64 `json:"price" binding:"omitempty,gt=0"`
+	Stock     *int     `json:"stock" binding:"omitempty,gt=0"`
+	StartTime *string  `json:"start_time" binding:"omitempty"`
+	Image     *string  `json:"image"`
+}
+
 func NewProductHandler(svc *service.ProductService) *ProductHandler {
 	return &ProductHandler{
 		svc: svc,
@@ -54,6 +62,13 @@ func parseStartTime(raw string) (time.Time, error) {
 // 发布商品
 func (h *ProductHandler) Create(c *gin.Context) {
 	appG := app.Gin{C: c}
+	uidAny, ok := c.Get("userID")
+	if !ok {
+		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		return
+	}
+	userID := uidAny.(uint)
+
 	var req CreateProductReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
@@ -67,6 +82,7 @@ func (h *ProductHandler) Create(c *gin.Context) {
 	}
 
 	p := &model.Product{
+		UserID:    userID,
 		Name:      req.Name,
 		Price:     req.Price,
 		Stock:     req.Stock,
@@ -135,5 +151,121 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		"items": list,
 		"total": total,
 		"page":  page,
+	})
+}
+
+// 更新商品（仅创建者）
+func (h *ProductHandler) UpdateProduct(c *gin.Context) {
+	appG := app.Gin{C: c}
+	uidAny, ok := c.Get("userID")
+	if !ok {
+		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		return
+	}
+	userID := uidAny.(uint)
+
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	var req UpdateProductReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	updates := map[string]any{}
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.Price != nil {
+		updates["price"] = *req.Price
+	}
+	if req.Stock != nil {
+		updates["stock"] = *req.Stock
+	}
+	if req.StartTime != nil {
+		if t, parseErr := parseStartTime(*req.StartTime); parseErr == nil {
+			updates["start_time"] = t
+		} else {
+			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "开始时间格式不正确")
+			return
+		}
+	}
+	if req.Image != nil {
+		updates["image"] = *req.Image
+	}
+
+	if err := h.svc.UpdateProduct(userID, uint(id), updates); err != nil {
+		if errors.Is(err, service.ErrProductNotFound) {
+			appG.Error(http.StatusNotFound, e.ERROR_NOT_EXIST_PRODUCT)
+		} else {
+			appG.Error(http.StatusInternalServerError, e.ERROR)
+		}
+		return
+	}
+	appG.Success(gin.H{"id": id})
+}
+
+// 删除商品（仅创建者）
+func (h *ProductHandler) DeleteProduct(c *gin.Context) {
+	appG := app.Gin{C: c}
+	uidAny, ok := c.Get("userID")
+	if !ok {
+		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		return
+	}
+	userID := uidAny.(uint)
+
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	if err := h.svc.DeleteProduct(userID, uint(id)); err != nil {
+		if errors.Is(err, service.ErrProductNotFound) {
+			appG.Error(http.StatusNotFound, e.ERROR_NOT_EXIST_PRODUCT)
+		} else {
+			appG.Error(http.StatusInternalServerError, e.ERROR)
+		}
+		return
+	}
+	appG.Success(gin.H{"id": id})
+}
+
+// 获取当前用户发布的商品
+func (h *ProductHandler) ListMyProducts(c *gin.Context) {
+	appG := app.Gin{C: c}
+	uidAny, ok := c.Get("userID")
+	if !ok {
+		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		return
+	}
+	userID := uidAny.(uint)
+
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page <= 0 {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+	size, err := strconv.Atoi(c.DefaultQuery("size", "10"))
+	if err != nil || size <= 0 {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	list, total, err := h.svc.ListUserProducts(userID, page, size)
+	if err != nil {
+		appG.Error(http.StatusInternalServerError, e.ERROR)
+		return
+	}
+	appG.Success(gin.H{
+		"items": list,
+		"total": total,
+		"page":  page,
+		"size":  size,
 	})
 }

@@ -22,7 +22,7 @@ func NewHttpServer() *gin.Engine {
 	userServicer := service.NewUserService(userRepo)
 	productServicer := service.NewProductService(productRepo)
 	seckillServicer := service.NewSeckillService()
-	orderServicer := service.NewOrderService(db.DB)
+	orderServicer := service.NewOrderService(db.DB, productRepo)
 	uploadServicer := service.NewUploadService(config.Conf.Server.UploadDir)
 
 	// handler 层
@@ -79,6 +79,9 @@ func NewHttpServer() *gin.Engine {
 		auth.POST("/upload", uploadHandler.UploadImage)
 
 		auth.POST("/products", productHandler.Create)
+		auth.PUT("/products/:id", productHandler.UpdateProduct)
+		auth.DELETE("/products/:id", productHandler.DeleteProduct)
+		auth.GET("/products/mine", productHandler.ListMyProducts)
 
 		auth.POST("/seckill", seckillHandler.Seckill)
 

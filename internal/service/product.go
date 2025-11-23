@@ -129,3 +129,29 @@ func (s *ProductService) GetProductByID(id uint) (*model.Product, error) {
 	}
 	return product, nil
 }
+
+func (s *ProductService) UpdateProduct(userID, id uint, data map[string]any) error {
+	if len(data) == 0 {
+		return nil
+	}
+	rows, err := s.repo.UpdateByUser(id, userID, data)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrProductNotFound
+	}
+	return nil
+}
+
+func (s *ProductService) DeleteProduct(userID, id uint) error {
+	p, err := s.repo.GetByIDAndUser(id, userID)
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(p.ID)
+}
+
+func (s *ProductService) ListUserProducts(userID uint, page, size int) ([]model.Product, int64, error) {
+	return s.repo.ListByUserID(userID, page, size)
+}
