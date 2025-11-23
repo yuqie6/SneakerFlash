@@ -7,6 +7,7 @@ import (
 	"SneakerFlash/internal/middlerware"
 	"SneakerFlash/internal/repository"
 	"SneakerFlash/internal/service"
+	"SneakerFlash/internal/infra/redis"
 	"net/http"
 
 	"github.com/gin-contrib/cors"
@@ -35,6 +36,9 @@ func NewHttpServer() *gin.Engine {
 	// 注册路由
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
+	if config.Conf.Risk.Enable {
+		r.Use(middlerware.BlackListMiddleware(redis.RDB))
+	}
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -61,14 +65,34 @@ func NewHttpServer() *gin.Engine {
 	api := r.Group("/api/v1")
 	{
 		api.POST("/register", userHandler.Register)
-		api.POST("/login", userHandler.Login)
+		if config.Conf.Risk.Enable {
+			loginLimit := middlerware.InterfaceLimiter(redis.RDB, middlerware.LimitConfig{
+				KeyPrefix: "rl:login",
+				Rate:      config.Conf.Risk.LoginRate.Rate,
+				Burst:     config.Conf.Risk.LoginRate.Burst,
+				TTL:       60,
+			}, "登录过于频繁，请稍后再试")
+			api.POST("/login", loginLimit, userHandler.Login)
+		} else {
+			api.POST("/login", userHandler.Login)
+		}
 		api.POST("/refresh", userHandler.Refresh)
 
 		api.GET("/products", productHandler.ListProducts)
 		api.GET("/product/:id", productHandler.GetProduct)
 
 		// 支付回调（示例）
-		api.POST("/payment/callback", orderHandler.PaymentCallback)
+		if config.Conf.Risk.Enable {
+			payLimit := middlerware.InterfaceLimiter(redis.RDB, middlerware.LimitConfig{
+				KeyPrefix: "rl:pay",
+				Rate:      config.Conf.Risk.PayRate.Rate,
+				Burst:     config.Conf.Risk.PayRate.Burst,
+				TTL:       60,
+			}, "支付请求过于频繁")
+			api.POST("/payment/callback", payLimit, orderHandler.PaymentCallback)
+		} else {
+			api.POST("/payment/callback", orderHandler.PaymentCallback)
+		}
 	}
 
 	auth := api.Group("/")
@@ -83,7 +107,23 @@ func NewHttpServer() *gin.Engine {
 		auth.DELETE("/products/:id", productHandler.DeleteProduct)
 		auth.GET("/products/mine", productHandler.ListMyProducts)
 
-		auth.POST("/seckill", seckillHandler.Seckill)
+		if config.Conf.Risk.Enable {
+			seckillLimit := middlerware.InterfaceLimiter(redis.RDB, middlerware.LimitConfig{
+				KeyPrefix: "rl:seckill",
+				Rate:      config.Conf.Risk.SeckillRate.Rate,
+				Burst:     config.Conf.Risk.SeckillRate.Burst,
+				TTL:       30,
+			}, "秒杀过于频繁，请稍后再试")
+			paramLimit := middlerware.ParamLimiter(redis.RDB, middlerware.LimitConfig{
+				KeyPrefix: "rl:hot:product",
+				Rate:      config.Conf.Risk.ProductRate.Rate,
+				Burst:     config.Conf.Risk.ProductRate.Burst,
+				TTL:       30,
+			}, "product_id", "该商品访问过于频繁，请稍后再试")
+			auth.POST("/seckill", seckillLimit, paramLimit, seckillHandler.Seckill)
+		} else {
+			auth.POST("/seckill", seckillHandler.Seckill)
+		}
 
 		auth.POST("/orders", orderHandler.CreateOrder)
 		auth.GET("/orders", orderHandler.ListOrders)
