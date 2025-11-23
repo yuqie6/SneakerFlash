@@ -6,12 +6,14 @@ import (
 	"SneakerFlash/internal/pkg/e"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"github.com/tidwall/gjson"
 )
 
 // RedisTokenBucket 使用 Lua 保证原子性
@@ -55,13 +57,23 @@ func rateLimited(c *gin.Context, msg string) {
 	c.Abort()
 }
 
+func buildKey(prefix, base string, c *gin.Context) string {
+	if uidAny, ok := c.Get("userID"); ok {
+		return fmt.Sprintf("%s:uid:%v:%s", prefix, uidAny, base)
+	}
+	if ip := clientIP(c); ip != "" {
+		return fmt.Sprintf("%s:ip:%s:%s", prefix, ip, base)
+	}
+	return fmt.Sprintf("%s:%s", prefix, base)
+}
+
 // InterfaceLimiter 针对固定 key 的限流
 func InterfaceLimiter(rdb *redis.Client, cfg LimitConfig, msg string) gin.HandlerFunc {
 	if cfg.Rate <= 0 || cfg.Burst <= 0 {
 		return func(c *gin.Context) { c.Next() }
 	}
 	return func(c *gin.Context) {
-		key := fmt.Sprintf("%s:%s", cfg.KeyPrefix, c.FullPath())
+		key := buildKey(cfg.KeyPrefix, c.FullPath(), c)
 		if ok := allow(rdb, key, cfg); !ok {
 			rateLimited(c, msg)
 			return
@@ -76,19 +88,12 @@ func ParamLimiter(rdb *redis.Client, cfg LimitConfig, param string, msg string) 
 		return func(c *gin.Context) { c.Next() }
 	}
 	return func(c *gin.Context) {
-		val := c.PostForm(param)
-		if val == "" {
-			val = c.Query(param)
-		}
-		if val == "" {
-			val = c.Param(param)
-		}
+		val := extractParam(c, param)
 		if val == "" {
 			c.Next()
 			return
 		}
-		safe := strings.TrimSpace(val)
-		key := fmt.Sprintf("%s:%s", cfg.KeyPrefix, safe)
+		key := buildKey(cfg.KeyPrefix, val, c)
 		if ok := allow(rdb, key, cfg); !ok {
 			rateLimited(c, msg)
 			return
@@ -146,6 +151,49 @@ func clientIP(c *gin.Context) string {
 		}
 	}
 	return c.ClientIP()
+}
+
+func extractParam(c *gin.Context, name string) string {
+	val := c.PostForm(name)
+	if val != "" {
+		return strings.TrimSpace(val)
+	}
+	val = c.Query(name)
+	if val != "" {
+		return strings.TrimSpace(val)
+	}
+	val = c.Param(name)
+	if val != "" {
+		return strings.TrimSpace(val)
+	}
+
+	body := readBodyOnce(c)
+	if body != "" {
+		res := gjson.Get(body, name)
+		if res.Exists() {
+			return strings.TrimSpace(res.String())
+		}
+	}
+	return ""
+}
+
+// readBodyOnce 读取 body 并复位，避免影响后续 handler
+func readBodyOnce(c *gin.Context) string {
+	const key = "_cached_body"
+	if cached, ok := c.Get(key); ok {
+		if s, ok := cached.(string); ok {
+			return s
+		}
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return ""
+	}
+	s := string(body)
+	c.Request.Body = io.NopCloser(strings.NewReader(s))
+	c.Set(key, s)
+	return s
 }
 
 // Helper 根据配置生成接口限流配置
