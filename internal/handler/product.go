@@ -6,6 +6,7 @@ import (
 	"SneakerFlash/internal/pkg/e"
 	"SneakerFlash/internal/service"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,7 +23,7 @@ type CreateProductReq struct {
 	Name      string  `json:"name" binding:"required"`
 	Price     float64 `json:"price" binding:"required,gt=0"`
 	Stock     int     `json:"stock" binding:"required,gt=0"`
-	StartTime string  `json:"start_time" binding:"required,datetime=2006-01-02 15:04:05"`
+	StartTime string  `json:"start_time" binding:"required"`
 	Image     string  `json:"image"`
 }
 
@@ -30,6 +31,24 @@ func NewProductHandler(svc *service.ProductService) *ProductHandler {
 	return &ProductHandler{
 		svc: svc,
 	}
+}
+
+func parseStartTime(raw string) (time.Time, error) {
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02T15:04",
+		"2006/01/02 15:04:05",
+		"2006/01/02/15:04",
+	}
+
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("invalid time format")
 }
 
 // 发布商品
@@ -41,20 +60,9 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		return
 	}
 
-	layouts := []string{time.RFC3339, "2006-01-02 15:04:05"}
-	var startTime time.Time
-	var err error
-	for _, layout := range layouts {
-		if t, parseErr := time.Parse(layout, req.StartTime); parseErr == nil {
-			startTime = t
-			err = nil
-			break
-		} else {
-			err = parseErr
-		}
-	}
+	startTime, err := parseStartTime(req.StartTime)
 	if err != nil || !startTime.After(time.Now()) {
-		appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "开始时间必须晚于当前时间")
+		appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "开始时间必须晚于当前时间（格式示例：2025-11-24 22:11:00）")
 		return
 	}
 
