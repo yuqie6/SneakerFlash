@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
+	"gorm.io/gorm"
 )
 
 type UserService struct {
@@ -99,4 +100,42 @@ func (s *UserService) Refresh(refreshToken string) (string, error) {
 		return "", fmt.Errorf("生成 token 失败: %w", err)
 	}
 	return access, nil
+}
+
+// 更新个人资料（用户名、头像等）
+func (s *UserService) UpdateProfile(userID uint, username, avatar *string) (*model.User, error) {
+	user, err := s.repo.GetByID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	updates := map[string]any{}
+
+	if username != nil && *username != user.Username {
+		_, err := s.repo.GetByUsername(*username)
+		switch {
+		case err == nil:
+			return nil, ErrUserExited
+		case !errors.Is(err, gorm.ErrRecordNotFound):
+			return nil, err
+		default:
+			updates["username"] = *username
+			user.Username = *username
+		}
+	}
+
+	if avatar != nil {
+		updates["avatar"] = *avatar
+		user.Avatar = *avatar
+	}
+
+	if len(updates) == 0 {
+		return user, nil
+	}
+
+	if err := s.repo.UpdateProfile(userID, updates); err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
