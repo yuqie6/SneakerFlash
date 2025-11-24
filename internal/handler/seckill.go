@@ -24,7 +24,18 @@ type SeckillReq struct {
 	ProductID uint `json:"product_id" binding:"required"`
 }
 
-// 执行秒杀
+// Seckill 执行秒杀
+// @Summary 秒杀抢购
+// @Tags 秒杀
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body SeckillReq true "秒杀参数"
+// @Success 200 {object} app.Response{data=OrderNumResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 429 {object} app.Response "被限流"
+// @Router /seckill [post]
 func (h *SeckillHandler) Seckill(c *gin.Context) {
 	appG := app.Gin{C: c}
 	// 1. 获取当前用户

@@ -17,7 +17,17 @@ func NewUploadHandler(svc *service.UploadService) *UploadHandler {
 	return &UploadHandler{svc: svc}
 }
 
-// 上传图片（头像、商品图通用）
+// UploadImage 上传图片（头像、商品图通用）
+// @Summary 上传图片
+// @Tags 文件
+// @Accept mpfd
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "图片文件"
+// @Success 200 {object} app.Response{data=UploadURLResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Router /upload [post]
 func (h *UploadHandler) UploadImage(c *gin.Context) {
 	appG := app.Gin{C: c}
 

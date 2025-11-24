@@ -12,6 +12,8 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func NewHttpServer() *gin.Engine {
@@ -56,6 +58,7 @@ func NewHttpServer() *gin.Engine {
 		uploadDir = "uploads"
 	}
 	r.Static("/uploads", uploadDir)
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// 处理预检请求
 	r.OPTIONS("/*path", func(c *gin.Context) {

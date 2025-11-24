@@ -59,7 +59,17 @@ func parseStartTime(raw string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("invalid time format")
 }
 
-// 发布商品
+// Create 发布商品
+// @Summary 发布商品
+// @Tags 商品
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body CreateProductReq true "商品参数"
+// @Success 200 {object} app.Response{data=model.Product}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Router /products [post]
 func (h *ProductHandler) Create(c *gin.Context) {
 	appG := app.Gin{C: c}
 	uidAny, ok := c.Get("userID")
@@ -103,7 +113,15 @@ func (h *ProductHandler) Create(c *gin.Context) {
 	appG.Success(p)
 }
 
-// 获取商品详情
+// GetProduct 获取商品详情
+// @Summary 获取商品详情
+// @Tags 商品
+// @Produce json
+// @Param id path int true "商品ID"
+// @Success 200 {object} app.Response{data=model.Product}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 404 {object} app.Response "未找到"
+// @Router /product/{id} [get]
 func (h *ProductHandler) GetProduct(c *gin.Context) {
 	appG := app.Gin{C: c}
 	idStr := c.Param("id")
@@ -127,7 +145,15 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	appG.Success(p)
 }
 
-// 获取商品列表
+// ListProducts 获取商品列表
+// @Summary 获取商品列表
+// @Tags 商品
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页条数" default(10)
+// @Success 200 {object} app.Response{data=ProductListResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Router /products [get]
 func (h *ProductHandler) ListProducts(c *gin.Context) {
 	appG := app.Gin{C: c}
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -154,7 +180,19 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	})
 }
 
-// 更新商品（仅创建者）
+// UpdateProduct 更新商品（仅创建者）
+// @Summary 更新商品
+// @Tags 商品
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "商品ID"
+// @Param payload body UpdateProductReq true "商品参数"
+// @Success 200 {object} app.Response{data=IDResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 404 {object} app.Response "未找到"
+// @Router /products/{id} [put]
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	appG := app.Gin{C: c}
 	uidAny, ok := c.Get("userID")
@@ -209,7 +247,17 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	appG.Success(gin.H{"id": id})
 }
 
-// 删除商品（仅创建者）
+// DeleteProduct 删除商品（仅创建者）
+// @Summary 删除商品
+// @Tags 商品
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "商品ID"
+// @Success 200 {object} app.Response{data=IDResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 404 {object} app.Response "未找到"
+// @Router /products/{id} [delete]
 func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	appG := app.Gin{C: c}
 	uidAny, ok := c.Get("userID")
@@ -236,7 +284,17 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	appG.Success(gin.H{"id": id})
 }
 
-// 获取当前用户发布的商品
+// ListMyProducts 获取当前用户发布的商品
+// @Summary 我的商品列表
+// @Tags 商品
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页条数" default(10)
+// @Success 200 {object} app.Response{data=ProductListWithSizeResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Router /products/mine [get]
 func (h *ProductHandler) ListMyProducts(c *gin.Context) {
 	appG := app.Gin{C: c}
 	uidAny, ok := c.Get("userID")

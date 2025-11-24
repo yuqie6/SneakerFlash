@@ -36,7 +36,18 @@ func NewOrderHandler(orderSvc *service.OrderService, productSvc *service.Product
 	}
 }
 
-// 创建订单并初始化支付单（幂等：user+product）
+// CreateOrder 创建订单并初始化支付单（幂等：user+product）
+// @Summary 创建订单并初始化支付
+// @Tags 订单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body CreateOrderReq true "订单参数"
+// @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 404 {object} app.Response "商品不存在"
+// @Router /orders [post]
 func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	appG := app.Gin{C: c}
 
@@ -85,7 +96,18 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	})
 }
 
-// 订单列表
+// ListOrders 订单列表
+// @Summary 查询订单列表
+// @Tags 订单
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页条数" default(10)
+// @Param status query int false "订单状态：0未支付 1已支付 2失败"
+// @Success 200 {object} app.Response{data=OrderListResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Router /orders [get]
 func (h *OrderHandler) ListOrders(c *gin.Context) {
 	appG := app.Gin{C: c}
 
@@ -136,7 +158,17 @@ func (h *OrderHandler) ListOrders(c *gin.Context) {
 	})
 }
 
-// 订单详情
+// GetOrder 订单详情
+// @Summary 获取订单详情
+// @Tags 订单
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "订单ID"
+// @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 404 {object} app.Response "未找到"
+// @Router /orders/{id} [get]
 func (h *OrderHandler) GetOrder(c *gin.Context) {
 	appG := app.Gin{C: c}
 
@@ -170,7 +202,16 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 	appG.Success(orderWithPayment)
 }
 
-// 支付回调（模拟验签已完成）
+// PaymentCallback 支付回调（模拟验签已完成）
+// @Summary 支付回调
+// @Tags 订单
+// @Accept json
+// @Produce json
+// @Param payload body PaymentCallbackReq true "支付回调参数"
+// @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 404 {object} app.Response "支付单不存在"
+// @Router /payment/callback [post]
 func (h *OrderHandler) PaymentCallback(c *gin.Context) {
 	appG := app.Gin{C: c}
 
