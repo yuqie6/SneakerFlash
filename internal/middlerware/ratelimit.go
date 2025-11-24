@@ -44,6 +44,7 @@ redis.call("EXPIRE", key, ttl)
 return allowed
 `
 
+// LimitConfig 定义令牌桶限流参数。
 type LimitConfig struct {
 	KeyPrefix string
 	Rate      int
@@ -67,7 +68,7 @@ func buildKey(prefix, base string, c *gin.Context) string {
 	return fmt.Sprintf("%s:%s", prefix, base)
 }
 
-// InterfaceLimiter 针对固定 key 的限流
+// InterfaceLimiter 针对接口路径做桶限流，优先按 userID，其次按 IP。
 func InterfaceLimiter(rdb *redis.Client, cfg LimitConfig, msg string) gin.HandlerFunc {
 	if cfg.Rate <= 0 || cfg.Burst <= 0 {
 		return func(c *gin.Context) { c.Next() }
@@ -82,7 +83,7 @@ func InterfaceLimiter(rdb *redis.Client, cfg LimitConfig, msg string) gin.Handle
 	}
 }
 
-// ParamLimiter 针对参数值限流，如 product_id
+// ParamLimiter 针对参数值限流（如 product_id），配合 buildKey 兼容用户/IP 维度。
 func ParamLimiter(rdb *redis.Client, cfg LimitConfig, param string, msg string) gin.HandlerFunc {
 	if cfg.Rate <= 0 || cfg.Burst <= 0 {
 		return func(c *gin.Context) { c.Next() }
@@ -102,6 +103,7 @@ func ParamLimiter(rdb *redis.Client, cfg LimitConfig, param string, msg string) 
 	}
 }
 
+// allow 执行 Lua 令牌桶，失败时放行以避免误杀。
 func allow(rdb *redis.Client, key string, cfg LimitConfig) bool {
 	now := time.Now().Unix()
 	ttl := cfg.TTL
@@ -116,7 +118,7 @@ func allow(rdb *redis.Client, key string, cfg LimitConfig) bool {
 	return status
 }
 
-// BlackListMiddleware 简单黑名单校验（IP/UserID）
+// BlackListMiddleware 简单黑名单校验（IP/UserID），命中则直接拒绝。
 func BlackListMiddleware(rdb *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		appG := app.Gin{C: c}
@@ -177,7 +179,7 @@ func extractParam(c *gin.Context, name string) string {
 	return ""
 }
 
-// readBodyOnce 读取 body 并复位，避免影响后续 handler
+// readBodyOnce 读取 body 并复位，避免影响后续 handler。
 func readBodyOnce(c *gin.Context) string {
 	const key = "_cached_body"
 	if cached, ok := c.Get(key); ok {
@@ -196,7 +198,7 @@ func readBodyOnce(c *gin.Context) string {
 	return s
 }
 
-// Helper 根据配置生成接口限流配置
+// BuildLimit 将配置转换为限流器的内部配置。
 func BuildLimit(rateCfg config.RateLimitConfig, prefix string, ttl int) LimitConfig {
 	return LimitConfig{
 		KeyPrefix: prefix,

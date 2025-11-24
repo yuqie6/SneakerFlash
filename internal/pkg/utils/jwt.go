@@ -19,7 +19,7 @@ const (
 	tokenTypeRefresh = "refresh"
 )
 
-// 签发 access 与 refresh token
+// GenerateTokens 签发 access 与 refresh token，TTL 读取配置。
 func GenerateTokens(userID uint, username string) (accessToken, refreshToken string, err error) {
 	accessToken, err = generateToken(userID, username, tokenTypeAccess, config.Conf.JWT.Expried)
 	if err != nil {
@@ -53,7 +53,7 @@ func generateToken(userID uint, username, tokenType string, ttlSeconds int) (str
 	return tokenClaims.SignedString([]byte(config.Conf.JWT.Secret))
 }
 
-// 解析 token
+// ParshToken 解析并校验 JWT（HS256），返回自定义 Claims。
 func ParshToken(token string) (*Claims, error) {
 	tokenClaims, err := jwt.ParseWithClaims(token, &Claims{}, func(t *jwt.Token) (any, error) {
 		return []byte(config.Conf.JWT.Secret), nil

@@ -21,6 +21,7 @@ type WorkerService struct {
 	paymentRepo *repository.PaymentRepo
 }
 
+// NewWorkerService 构建异步消费服务，处理秒杀队列落库。
 func NewWorkerService(db *gorm.DB, productRepo *repository.ProductRepo, order *repository.OrderRepo) *WorkerService {
 	return &WorkerService{
 		db:          db,
@@ -30,6 +31,7 @@ func NewWorkerService(db *gorm.DB, productRepo *repository.ProductRepo, order *r
 	}
 }
 
+// CreateOderFromMessage 消费秒杀消息：幂等校验 -> 扣减库存 -> 创建订单/支付单 -> 失效缓存，事务失败时回滚 Redis 库存。
 func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 	// 1. 解析消息
 	var msg SeckillMessage

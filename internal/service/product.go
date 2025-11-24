@@ -34,7 +34,7 @@ func NewProductService(repo *repository.ProductRepo) *ProductService {
 	}
 }
 
-// 业务 1: 创建商品
+// CreateProduct 创建商品；若 Redis 预热失败会回滚数据库记录以保持库存一致性。
 func (s *ProductService) CreateProduct(product *model.Product) error {
 	if err := s.repo.Create(product); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || isMySQLDuplicate(err) {
@@ -51,18 +51,17 @@ func (s *ProductService) CreateProduct(product *model.Product) error {
 	return nil
 }
 
-// 业务 2: 库存预热(核心)
+// SyncStockToRedis 将库存同步到 Redis，作为秒杀读写的唯一实时源。
 func (s *ProductService) SyncStockToRedis(id uint, stock int) error {
 	return setStockCache(id, stock)
 }
 
-// 业务 3: 获取列表
+// ListProducts 分页查询商品列表。
 func (s *ProductService) ListProducts(page, pageSize int) ([]model.Product, int64, error) {
 	return s.repo.List(page, pageSize)
 }
 
-// 业务 4: 获取商品详情
-// 查缓存 -> 命中返回 -> 未命中查库 -> 写缓存 -> 返回
+// GetProductByID 优先读缓存，singleflight 防击穿，null 哨兵防穿透，随机 TTL 防雪崩；库存以 Redis 为准。
 func (s *ProductService) GetProductByID(id uint) (*model.Product, error) {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("product:info:%d", id)
@@ -134,6 +133,7 @@ func (s *ProductService) GetProductByID(id uint) (*model.Product, error) {
 	return product, nil
 }
 
+// UpdateProduct 仅允许创建者更新，未命中则视为不存在。
 func (s *ProductService) UpdateProduct(userID, id uint, data map[string]any) error {
 	if len(data) == 0 {
 		return nil
@@ -148,6 +148,7 @@ func (s *ProductService) UpdateProduct(userID, id uint, data map[string]any) err
 	return nil
 }
 
+// DeleteProduct 删除指定用户的商品。
 func (s *ProductService) DeleteProduct(userID, id uint) error {
 	p, err := s.repo.GetByIDAndUser(id, userID)
 	if err != nil {
@@ -156,6 +157,7 @@ func (s *ProductService) DeleteProduct(userID, id uint) error {
 	return s.repo.Delete(p.ID)
 }
 
+// ListUserProducts 查询用户发布的商品列表。
 func (s *ProductService) ListUserProducts(userID uint, page, size int) ([]model.Product, int64, error) {
 	return s.repo.ListByUserID(userID, page, size)
 }

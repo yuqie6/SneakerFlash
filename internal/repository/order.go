@@ -10,6 +10,7 @@ type OrderRepo struct {
 	db *gorm.DB
 }
 
+// NewOrderRepo 构建订单仓储。
 func NewOrderRepo(db *gorm.DB) *OrderRepo {
 	return &OrderRepo{
 		db: db,
@@ -28,6 +29,7 @@ func (r *OrderRepo) GetByID(id uint) (*model.Order, error) {
 	return &order, nil
 }
 
+// GetByUserAndProduct 查询用户对同一商品的订单，用于幂等创建。
 func (r *OrderRepo) GetByUserAndProduct(userID, productID uint) (*model.Order, error) {
 	var order model.Order
 	if err := r.db.Where("user_id = ? AND product_id = ?", userID, productID).First(&order).Error; err != nil {
@@ -36,7 +38,7 @@ func (r *OrderRepo) GetByUserAndProduct(userID, productID uint) (*model.Order, e
 	return &order, nil
 }
 
-// 获取用户的订单列表
+// ListByUserID 获取用户订单列表，可按状态过滤，按创建时间倒序。
 func (r *OrderRepo) ListByUserID(uid uint, status *model.OrderStatus, page, pagesize int) ([]model.Order, int64, error) {
 	var orders []model.Order
 	var total int64
@@ -57,7 +59,7 @@ func (r *OrderRepo) ListByUserID(uid uint, status *model.OrderStatus, page, page
 	return orders, total, err
 }
 
-// 按当前状态更新订单状态，避免重复回调覆盖
+// UpdateStatusIfMatch 仅在当前状态匹配时更新，用于避免重复回调覆盖。
 func (r *OrderRepo) UpdateStatusIfMatch(orderID uint, fromStatus, toStatus model.OrderStatus) (int64, error) {
 	tx := r.db.Model(&model.Order{}).Where("id = ? AND status = ?", orderID, fromStatus).Update("status", toStatus)
 	return tx.RowsAffected, tx.Error

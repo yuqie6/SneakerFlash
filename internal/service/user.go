@@ -29,8 +29,7 @@ func NewUserService(repo *repository.UserRepo) *UserService {
 	}
 }
 
-// 业务 1: 用户注册
-// 参数: username, password
+// Register 注册用户，先查重后落库并存储加密密码。
 func (s *UserService) Register(username, password string) error {
 	// 检查用户是否存在
 	_, err := s.repo.GetByUsername(username)
@@ -53,9 +52,7 @@ func (s *UserService) Register(username, password string) error {
 	return s.repo.Create(user)
 }
 
-// 业务 2: 用户登录
-// 入参: username, password
-// 出参: access token, refresh token, err
+// Login 校验密码后签发 access/refresh token。
 func (s *UserService) Login(username, password string) (string, string, error) {
 	// 查找用户
 	user, err := s.repo.GetByUsername(username)
@@ -77,12 +74,12 @@ func (s *UserService) Login(username, password string) (string, string, error) {
 	return access, refresh, nil
 }
 
-// 业务 3: 获取个人信息
+// GetProfile 查询用户信息。
 func (s *UserService) GetProfile(userID uint) (*model.User, error) {
 	return s.repo.GetByID(userID)
 }
 
-// 刷新 token
+// Refresh 使用 refresh token 续签新的 access token。
 func (s *UserService) Refresh(refreshToken string) (string, error) {
 	claims, err := utils.ParshToken(refreshToken)
 	if err != nil {
@@ -102,7 +99,7 @@ func (s *UserService) Refresh(refreshToken string) (string, error) {
 	return access, nil
 }
 
-// 更新个人资料（用户名、头像等）
+// UpdateProfile 更新用户名或头像；用户名变更会先查重。
 func (s *UserService) UpdateProfile(userID uint, username, avatar *string) (*model.User, error) {
 	user, err := s.repo.GetByID(userID)
 	if err != nil {

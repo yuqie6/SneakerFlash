@@ -28,6 +28,7 @@ type OrderWithPayment struct {
 	Payment *model.Payment `json:"payment,omitempty"`
 }
 
+// NewOrderService 构建订单服务，聚合订单/支付/商品仓储用于事务处理。
 func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo) *OrderService {
 	return &OrderService{
 		db:          db,
@@ -37,7 +38,7 @@ func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo) *OrderSer
 	}
 }
 
-// 创建订单并确保存在对应支付单；按 user_id+product_id 幂等，返回订单与支付单
+// CreateOrderAndInitPayment 创建订单并确保支付单存在；按 user_id+product_id 幂等，事务内处理并发重试。
 func (s *OrderService) CreateOrderAndInitPayment(userID, productID uint, amountCents int64) (*OrderWithPayment, error) {
 	var result OrderWithPayment
 
@@ -105,12 +106,12 @@ func (s *OrderService) CreateOrderAndInitPayment(userID, productID uint, amountC
 	return &result, nil
 }
 
-// 查询订单列表（可选状态过滤）
+// ListOrders 查询订单列表，可选状态过滤。
 func (s *OrderService) ListOrders(userID uint, status *model.OrderStatus, page, pageSize int) ([]model.Order, int64, error) {
 	return s.orderRepo.ListByUserID(userID, status, page, pageSize)
 }
 
-// 获取订单详情，包含支付单；校验 user 归属
+// GetOrderWithPayment 获取订单详情（含支付单），同时校验用户归属并补偿缺失的支付单。
 func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPayment, error) {
 	order, err := s.orderRepo.GetByID(orderID)
 	if err != nil {
@@ -157,8 +158,7 @@ func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPaym
 	}, nil
 }
 
-// 处理支付结果回调，幂等更新支付单与订单状态
-// 防 1: 脏写 2: 并发竟态 3: 重复回调
+// HandlePaymentResult 幂等处理支付回调：乐观锁更新支付单，条件更新订单状态，并在支付成功时刷新缓存库存。
 func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.PaymentStatus, notifyData string) (*OrderWithPayment, error) {
 	if targetStatus != model.PaymentStatusPaid && targetStatus != model.PaymentStatusFailed && targetStatus != model.PaymentStatusRefunded {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPayStatus, targetStatus)

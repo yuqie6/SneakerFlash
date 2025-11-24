@@ -12,6 +12,7 @@ type PaymentRepo struct {
 	db *gorm.DB
 }
 
+// NewPaymentRepo 构建支付仓储。
 func NewPaymentRepo(db *gorm.DB) *PaymentRepo {
 	return &PaymentRepo{
 		db: db,

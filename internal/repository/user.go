@@ -10,6 +10,7 @@ type UserRepo struct {
 	db *gorm.DB
 }
 
+// NewUserRepo 构建用户仓储。
 func NewUserRepo(db *gorm.DB) *UserRepo {
 	return &UserRepo{
 		db: db,

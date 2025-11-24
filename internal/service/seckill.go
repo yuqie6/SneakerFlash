@@ -59,7 +59,7 @@ type SeckillMessage struct {
 	Time      time.Time `json:"time"`
 }
 
-// 秒杀具体逻辑
+// Seckill 秒杀扣减库存并投递 Kafka 消息；依赖 Redis 原子脚本保证幂等，发送失败会回滚库存。
 func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
 	ctx := context.Background()
 

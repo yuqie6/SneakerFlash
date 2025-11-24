@@ -12,6 +12,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// JWTauth 校验 Bearer Token，验证类型为 access，解析后将 userID/username 注入上下文。
 func JWTauth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		appG := app.Gin{C: ctx}

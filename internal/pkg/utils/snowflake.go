@@ -12,7 +12,7 @@ var (
 	once sync.Once
 )
 
-// 初始化雪花节点
+// InitSnowflake 初始化雪花节点（全局单例）。
 func InitSnowflake(machineID int64) (err error) {
 	once.Do(func() {
 		node, err = snowflake.NewNode(machineID)
@@ -23,7 +23,7 @@ func InitSnowflake(machineID int64) (err error) {
 	return nil
 }
 
-// 生成雪花 id
+// GenSnowflakeID 生成字符串形式的全局唯一 ID。
 func GenSnowflakeID() (string, error) {
 	if node == nil {
 		return "", fmt.Errorf("雪花算法未初始化")
@@ -31,7 +31,7 @@ func GenSnowflakeID() (string, error) {
 	return node.Generate().String(), nil
 }
 
-// 生成 int64 类型 的 id
+// GenSnowflakeIDInt64 生成 int64 类型的全局唯一 ID。
 func GenSnowflakeIDInt64() (int64, error) {
 	if node == nil {
 		return 0, fmt.Errorf("雪花算法未初始化")
