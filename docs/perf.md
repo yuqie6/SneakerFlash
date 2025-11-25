@@ -20,8 +20,13 @@ k6 run perf/k6-seckill.js
 - `PRE_ALLOCATED_VUS` / `MAX_VUS`：预分配和上限虚拟用户数。
 - `USER_PREFIX` / `USER_COUNT` / `USER_PASSWORD`：压测账户前缀、数量与密码，默认 `perf_u`、`3000`、`PerfTest#123`；脚本会批量登录并仅对缺失用户注册。
 - `USER_BATCH`：批量登录/注册并发度，默认 `200`，首次跑大用户量时可适当调高减少 `setup` 时间（也可通过 `SETUP_TIMEOUT=5m` 增大超时）。
+- `SETUP_TIMEOUT`：`setup` 阶段超时时间，默认 `5m`。
+- `START_DELAY_SEC`：商品开始时间距当前的秒数，默认 `120`（建议首轮大用户量保持 >60s，避免创建商品时已过期）。
+- `FAIL_LOG_LIMIT`：VU1 仅打印前 N 条业务失败，默认 `20`，用于快速查看失败原因。
+- `TOKEN_STRATEGY`：`round_robin`（默认，按全局迭代轮询用户，减少重复抢购）或 `random`。
+- `USE_RAMP` / `RAMP_STAGES` / `START_RATE`：启用 ramping-arrival-rate（默认关闭）。`USE_RAMP=true` 时使用 `START_RATE` 作为起始 RPS，`RAMP_STAGES` 形如 `30s:800,30s:1200,30s:1500`。
 - `PRODUCT_STOCK` / `PRODUCT_PRICE`：压测商品库存与单价。
-- `START_DELAY_SEC`：商品开始时间距当前的秒数（需大于 0）。
+- `TOKEN_CSV`：指定已有 token 的 CSV 路径（表头包含 `token` 或 `access_token`），提供后跳过注册/登录，直接轮询 token。
 
 ## 指标关注点
 - `seckill_success_rate`：业务成功率（code=200）。
@@ -32,3 +37,22 @@ k6 run perf/k6-seckill.js
 ## 使用建议
 - 先以低 `RATE` 探测，再逐级提升，结合 Redis/Kafka/DB 监控确认瓶颈位置。
 - 如果需要只压 Redis/Lua 路径，可暂时停用 Kafka 或改写 `Send` 为空实现，以分离链路影响（改动需谨慎并限定在压测环境）。
+
+## 批量导出 token（一次性登录）
+在压测前生成 `token.csv`，避免每次登录注册耗时：
+```bash
+# 示例：生成 20000 个用户 token 到 perf/token.csv
+go run ./perf/export_tokens.go \
+  --base-url http://localhost:8000/api/v1 \
+  --prefix perf_u \
+  --password PerfTest#123 \
+  --count 20000 \
+  --workers 100 \
+  --out perf/token.csv
+```
+压测时使用：
+```bash
+TOKEN_CSV=perf/token.csv PRODUCT_STOCK=200000 START_DELAY_SEC=180 \
+RATE=1500 DURATION=60s \
+k6 run perf/k6-seckill.js
+```
