@@ -20,6 +20,7 @@ func NewPaymentRepo(db *gorm.DB) *PaymentRepo {
 	}
 }
 
+// WithContext 绑定请求上下文，确保支付操作日志能关联到请求链路。
 func (r *PaymentRepo) WithContext(ctx context.Context) *PaymentRepo {
 	if ctx == nil {
 		return r

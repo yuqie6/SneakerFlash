@@ -39,6 +39,7 @@ func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo) *OrderSer
 	}
 }
 
+// WithContext 绑定请求上下文，使事务与仓储日志携带 request_id。
 func (s *OrderService) WithContext(ctx context.Context) *OrderService {
 	if ctx == nil {
 		return s

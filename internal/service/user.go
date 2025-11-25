@@ -30,6 +30,7 @@ func NewUserService(repo *repository.UserRepo) *UserService {
 	}
 }
 
+// WithContext 绑定请求上下文，让用户相关数据库操作日志带上 request_id。
 func (s *UserService) WithContext(ctx context.Context) *UserService {
 	if ctx == nil {
 		return s

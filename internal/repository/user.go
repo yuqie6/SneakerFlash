@@ -18,6 +18,7 @@ func NewUserRepo(db *gorm.DB) *UserRepo {
 	}
 }
 
+// WithContext 绑定请求上下文，供用户查询/更新日志关联 request_id。
 func (r *UserRepo) WithContext(ctx context.Context) *UserRepo {
 	if ctx == nil {
 		return r

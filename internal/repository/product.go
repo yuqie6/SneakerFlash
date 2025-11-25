@@ -18,6 +18,7 @@ func NewProductRepo(db *gorm.DB) *ProductRepo {
 	}
 }
 
+// WithContext 绑定请求上下文，便于 GORM 日志沿用 slog 的 request_id。
 func (r *ProductRepo) WithContext(ctx context.Context) *ProductRepo {
 	if ctx == nil {
 		return r

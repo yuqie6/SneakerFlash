@@ -18,6 +18,7 @@ func NewOrderRepo(db *gorm.DB) *OrderRepo {
 	}
 }
 
+// WithContext 绑定请求上下文，保持仓储日志与上游 request_id 对齐。
 func (r *OrderRepo) WithContext(ctx context.Context) *OrderRepo {
 	if ctx == nil {
 		return r

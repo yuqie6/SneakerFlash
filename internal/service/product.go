@@ -34,6 +34,7 @@ func NewProductService(repo *repository.ProductRepo) *ProductService {
 	}
 }
 
+// WithContext 让仓储与 GORM 日志继承请求上下文。
 func (s *ProductService) WithContext(ctx context.Context) *ProductService {
 	if ctx == nil {
 		return s
