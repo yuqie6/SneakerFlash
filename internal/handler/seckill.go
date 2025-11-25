@@ -3,6 +3,7 @@ package handler
 import (
 	"SneakerFlash/internal/pkg/app"
 	"SneakerFlash/internal/pkg/e"
+	"SneakerFlash/internal/pkg/metrics"
 	"SneakerFlash/internal/service"
 	"errors"
 	"net/http"
@@ -62,17 +63,22 @@ func (h *SeckillHandler) Seckill(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrSeckillRepeat):
+			metrics.IncSeckillResult("repeat")
 			appG.Error(http.StatusOK, e.ERROR_REPEAT_BUY)
 		case errors.Is(err, service.ErrSeckillFull):
+			metrics.IncSeckillResult("sold_out")
 			appG.Error(http.StatusOK, e.ERROR_SECKILL_FULL)
 		case errors.Is(err, service.ErrSeckillBusy):
+			metrics.IncSeckillResult("busy")
 			appG.ErrorMsg(http.StatusServiceUnavailable, e.ERROR, err.Error())
 		default:
+			metrics.IncSeckillResult("error")
 			appG.Error(http.StatusInternalServerError, e.ERROR)
 		}
 		return
 	}
 
 	// 4. 秒杀成功
+	metrics.IncSeckillResult("success")
 	appG.Success(gin.H{"order_num": orderNum})
 }

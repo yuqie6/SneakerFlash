@@ -37,7 +37,7 @@ func NewHttpServer() *gin.Engine {
 
 	// 注册路由
 	r := gin.New()
-	r.Use(middlerware.SlogMiddlerware(), middlerware.SlogRecovery())
+	r.Use(middlerware.SlogMiddlerware(), middlerware.MetricsMiddleware(), middlerware.SlogRecovery())
 	if config.Conf.Risk.Enable {
 		r.Use(middlerware.BlackListMiddleware(redis.RDB))
 		r.Use(middlerware.GrayListMiddleware(redis.RDB))
@@ -60,6 +60,9 @@ func NewHttpServer() *gin.Engine {
 	}
 	r.Static("/uploads", uploadDir)
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	r.GET("/metrics", func(c *gin.Context) {
+		middlerware.MetricsHandler(c)
+	})
 
 	// 处理预检请求
 	r.OPTIONS("/*path", func(c *gin.Context) {
