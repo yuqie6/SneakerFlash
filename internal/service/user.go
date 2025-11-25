@@ -29,14 +29,8 @@ func NewUserService(repo *repository.UserRepo) *UserService {
 	}
 }
 
-// Register 注册用户，先查重后落库并存储加密密码。
+// Register 注册用户，直接插入并依赖唯一键防重，密码使用哈希存储。
 func (s *UserService) Register(username, password string) error {
-	// 检查用户是否存在
-	_, err := s.repo.GetByUsername(username)
-	if err == nil {
-		return ErrUserExited
-	}
-
 	// 加密用户密码
 	hashPwd, err := utils.HashPassword(password)
 	if err != nil {
@@ -49,7 +43,13 @@ func (s *UserService) Register(username, password string) error {
 		Password: hashPwd,
 		Balance:  0,
 	}
-	return s.repo.Create(user)
+	if err := s.repo.Create(user); err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) || isMySQLDuplicate(err) {
+			return ErrUserExited
+		}
+		return err
+	}
+	return nil
 }
 
 // Login 校验密码后签发 access/refresh token。
