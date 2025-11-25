@@ -17,6 +17,8 @@ definitions:
     type: object
   handler.CreateOrderReq:
     properties:
+      coupon_id:
+        type: integer
       product_id:
         type: integer
     required:
@@ -131,6 +133,20 @@ definitions:
       total:
         type: integer
     type: object
+  handler.PurchaseCouponReq:
+    properties:
+      coupon_id:
+        type: integer
+    required:
+    - coupon_id
+    type: object
+  handler.PurchaseVIPReq:
+    properties:
+      plan_id:
+        type: integer
+    required:
+    - plan_id
+    type: object
   handler.RefreshReq:
     properties:
       refresh_token:
@@ -206,6 +222,30 @@ definitions:
       username:
         type: string
     type: object
+  model.CouponStatus:
+    enum:
+    - available
+    - used
+    - expired
+    type: string
+    x-enum-varnames:
+    - CouponStatusAvailable
+    - CouponStatusUsed
+    - CouponStatusExpired
+  model.CouponType:
+    enum:
+    - full_cut
+    - discount
+    type: string
+    x-enum-comments:
+      CouponTypeDiscount: 折扣
+      CouponTypeFullCut: 满减
+    x-enum-descriptions:
+    - 满减
+    - 折扣
+    x-enum-varnames:
+    - CouponTypeFullCut
+    - CouponTypeDiscount
   model.Order:
     properties:
       created_at:
@@ -266,12 +306,106 @@ definitions:
       user_id:
         type: integer
     type: object
+  service.MyCoupon:
+    properties:
+      amount_cents:
+        type: integer
+      coupon_id:
+        type: integer
+      description:
+        type: string
+      discount_rate:
+        type: integer
+      id:
+        type: integer
+      min_spend_cents:
+        type: integer
+      obtained_from:
+        type: string
+      status:
+        $ref: '#/definitions/model.CouponStatus'
+      title:
+        type: string
+      type:
+        $ref: '#/definitions/model.CouponType'
+      valid_from:
+        type: string
+      valid_to:
+        type: string
+    type: object
+  service.VIPProfile:
+    properties:
+      effective_level:
+        type: integer
+      growth_level:
+        type: integer
+      paid_expired_at:
+        type: string
+      paid_level:
+        type: integer
+      total_spent_cents:
+        type: integer
+    type: object
 info:
   contact: {}
   description: SneakerFlash 球鞋秒杀系统接口文档
   title: SneakerFlash API
   version: "1.0"
 paths:
+  /coupons/mine:
+    get:
+      parameters:
+      - description: available/used/expired
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.MyCoupon'
+                  type: array
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 我的优惠券
+      tags:
+      - Coupon
+  /coupons/purchase:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: coupon_id
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handler.PurchaseCouponReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.MyCoupon'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 购买优惠券（模拟支付）
+      tags:
+      - Coupon
   /login:
     post:
       consumes:
@@ -353,7 +487,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: 订单参数
+      - description: 订单参数（可选 coupon_id）
         in: body
         name: payload
         required: true
@@ -875,6 +1009,65 @@ paths:
       summary: 上传图片
       tags:
       - 文件
+  /vip/profile:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.VIPProfile'
+              type: object
+        "401":
+          description: 未登录
+          schema:
+            $ref: '#/definitions/app.Response'
+      security:
+      - BearerAuth: []
+      summary: 获取 VIP 信息
+      tags:
+      - VIP
+  /vip/purchase:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 付费套餐
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handler.PurchaseVIPReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.VIPProfile'
+              type: object
+        "400":
+          description: 参数错误或套餐不存在
+          schema:
+            $ref: '#/definitions/app.Response'
+        "401":
+          description: 未登录
+          schema:
+            $ref: '#/definitions/app.Response'
+      security:
+      - BearerAuth: []
+      summary: 购买付费 VIP
+      tags:
+      - VIP
 schemes:
 - http
 securityDefinitions:

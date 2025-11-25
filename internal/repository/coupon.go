@@ -25,6 +25,10 @@ func (r *CouponRepo) WithContext(ctx context.Context) *CouponRepo {
 	return &CouponRepo{db: r.db.WithContext(ctx)}
 }
 
+func (r *CouponRepo) DB() *gorm.DB {
+	return r.db
+}
+
 func (r *CouponRepo) GetByID(id uint) (*model.Coupon, error) {
 	var c model.Coupon
 	if err := r.db.First(&c, id).Error; err != nil {
@@ -46,6 +50,10 @@ func (r *UserCouponRepo) WithContext(ctx context.Context) *UserCouponRepo {
 		return r
 	}
 	return &UserCouponRepo{db: r.db.WithContext(ctx)}
+}
+
+func (r *UserCouponRepo) DB() *gorm.DB {
+	return r.db
 }
 
 // GetUsableForUpdate 查询可用券并加锁。
@@ -88,4 +96,13 @@ func (r *UserCouponRepo) ReleaseByOrder(orderID uint) error {
 			"status":   model.CouponStatusAvailable,
 			"order_id": nil,
 		}).Error
+}
+
+// CountByPeriod 统计某个来源在周期内已发放数量。
+func (r *UserCouponRepo) CountByPeriod(userID uint, obtainedFrom string, start, end time.Time) (int64, error) {
+	var cnt int64
+	err := r.db.Model(&model.UserCoupon{}).
+		Where("user_id = ? AND obtained_from = ? AND valid_from >= ? AND valid_from < ?", userID, obtainedFrom, start, end).
+		Count(&cnt).Error
+	return cnt, err
 }

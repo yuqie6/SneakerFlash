@@ -28,6 +28,7 @@ func NewHttpServer() *gin.Engine {
 	orderServicer := service.NewOrderService(db.DB, productRepo, userRepo)
 	uploadServicer := service.NewUploadService(config.Conf.Server.UploadDir)
 	vipServicer := service.NewVIPService(db.DB, userRepo)
+	couponServicer := service.NewCouponService(db.DB)
 
 	// handler 层
 	userHandler := handler.NewUserHandler(userServicer)
@@ -36,6 +37,7 @@ func NewHttpServer() *gin.Engine {
 	orderHandler := handler.NewOrderHandler(orderServicer, productServicer)
 	uploadHandler := handler.NewUploadHandler(uploadServicer)
 	vipHandler := handler.NewVIPHandler(vipServicer)
+	couponHandler := handler.NewCouponHandler(couponServicer, vipServicer)
 
 	// 注册路由
 	r := gin.New()
@@ -102,6 +104,8 @@ func NewHttpServer() *gin.Engine {
 		auth.POST("/upload", uploadHandler.UploadImage)
 		auth.GET("/vip/profile", vipHandler.GetProfile)
 		auth.POST("/vip/purchase", vipHandler.Purchase)
+		auth.GET("/coupons/mine", couponHandler.ListMyCoupons)
+		auth.POST("/coupons/purchase", couponHandler.PurchaseCoupon)
 
 		auth.POST("/products", productHandler.Create)
 		auth.PUT("/products/:id", productHandler.UpdateProduct)

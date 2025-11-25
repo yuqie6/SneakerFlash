@@ -15,6 +15,103 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/coupons/mine": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Coupon"
+                ],
+                "summary": "我的优惠券",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "available/used/expired",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.MyCoupon"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/coupons/purchase": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Coupon"
+                ],
+                "summary": "购买优惠券（模拟支付）",
+                "parameters": [
+                    {
+                        "description": "coupon_id",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.PurchaseCouponReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.MyCoupon"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/login": {
             "post": {
                 "description": "登录后下发 access/refresh token",
@@ -160,7 +257,7 @@ const docTemplate = `{
                 "summary": "创建订单并初始化支付",
                 "parameters": [
                     {
-                        "description": "订单参数",
+                        "description": "订单参数（可选 coupon_id）",
                         "name": "payload",
                         "in": "body",
                         "required": true,
@@ -1033,6 +1130,110 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/vip/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "VIP"
+                ],
+                "summary": "获取 VIP 信息",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.VIPProfile"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/vip/purchase": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "VIP"
+                ],
+                "summary": "购买付费 VIP",
+                "parameters": [
+                    {
+                        "description": "付费套餐",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.PurchaseVIPReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.VIPProfile"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或套餐不存在",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1065,6 +1266,9 @@ const docTemplate = `{
                 "product_id"
             ],
             "properties": {
+                "coupon_id": {
+                    "type": "integer"
+                },
                 "product_id": {
                     "type": "integer"
                 }
@@ -1236,6 +1440,28 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.PurchaseCouponReq": {
+            "type": "object",
+            "required": [
+                "coupon_id"
+            ],
+            "properties": {
+                "coupon_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.PurchaseVIPReq": {
+            "type": "object",
+            "required": [
+                "plan_id"
+            ],
+            "properties": {
+                "plan_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "handler.RefreshReq": {
             "type": "object",
             "required": [
@@ -1351,6 +1577,38 @@ const docTemplate = `{
                 }
             }
         },
+        "model.CouponStatus": {
+            "type": "string",
+            "enum": [
+                "available",
+                "used",
+                "expired"
+            ],
+            "x-enum-varnames": [
+                "CouponStatusAvailable",
+                "CouponStatusUsed",
+                "CouponStatusExpired"
+            ]
+        },
+        "model.CouponType": {
+            "type": "string",
+            "enum": [
+                "full_cut",
+                "discount"
+            ],
+            "x-enum-comments": {
+                "CouponTypeDiscount": "折扣",
+                "CouponTypeFullCut": "满减"
+            },
+            "x-enum-descriptions": [
+                "满减",
+                "折扣"
+            ],
+            "x-enum-varnames": [
+                "CouponTypeFullCut",
+                "CouponTypeDiscount"
+            ]
+        },
         "model.Order": {
             "type": "object",
             "properties": {
@@ -1433,6 +1691,67 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.MyCoupon": {
+            "type": "object",
+            "properties": {
+                "amount_cents": {
+                    "type": "integer"
+                },
+                "coupon_id": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "discount_rate": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "min_spend_cents": {
+                    "type": "integer"
+                },
+                "obtained_from": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/model.CouponStatus"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/model.CouponType"
+                },
+                "valid_from": {
+                    "type": "string"
+                },
+                "valid_to": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.VIPProfile": {
+            "type": "object",
+            "properties": {
+                "effective_level": {
+                    "type": "integer"
+                },
+                "growth_level": {
+                    "type": "integer"
+                },
+                "paid_expired_at": {
+                    "type": "string"
+                },
+                "paid_level": {
+                    "type": "integer"
+                },
+                "total_spent_cents": {
                     "type": "integer"
                 }
             }

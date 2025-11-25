@@ -43,7 +43,7 @@ func NewOrderHandler(orderSvc *service.OrderService, productSvc *service.Product
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param payload body CreateOrderReq true "订单参数"
+// @Param payload body CreateOrderReq true "订单参数（可选 coupon_id）"
 // @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
 // @Failure 400 {object} app.Response "参数错误"
 // @Failure 401 {object} app.Response "未登录"
