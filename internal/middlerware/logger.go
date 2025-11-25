@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"SneakerFlash/internal/pkg/logger"
@@ -37,7 +38,6 @@ func SlogMiddlerware() gin.HandlerFunc {
 		}
 
 		attrs := []slog.Attr{
-			slog.String("request_id", requestID),
 			slog.Int("status", status),
 			slog.String("method", c.Request.Method),
 			slog.String("path", path),
@@ -76,4 +76,24 @@ func generateRequestID() string {
 		return hex.EncodeToString(b[:])
 	}
 	return hex.EncodeToString([]byte(time.Now().Format("150405.000000000")))
+}
+
+// SlogRecovery 捕获 panic 并写入 slog，保证链路指标与异常统一。
+func SlogRecovery() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				slog.ErrorContext(
+					c.Request.Context(),
+					"panic recovered",
+					slog.Any("err", rec),
+					slog.String("method", c.Request.Method),
+					slog.String("path", c.Request.URL.Path),
+					slog.String("stack", string(debug.Stack())),
+				)
+				c.AbortWithStatus(http.StatusInternalServerError)
+			}
+		}()
+		c.Next()
+	}
 }
