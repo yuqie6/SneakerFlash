@@ -37,7 +37,7 @@ func NewHttpServer() *gin.Engine {
 
 	// 注册路由
 	r := gin.New()
-	r.Use(middlerware.SlogMiddlerware(), gin.Recovery())
+	r.Use(middlerware.SlogMiddlerware(), middlerware.SlogRecovery())
 	if config.Conf.Risk.Enable {
 		r.Use(middlerware.BlackListMiddleware(redis.RDB))
 	}

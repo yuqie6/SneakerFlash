@@ -2,6 +2,7 @@ package repository
 
 import (
 	"SneakerFlash/internal/model"
+	"context"
 
 	"gorm.io/gorm"
 )
@@ -15,6 +16,13 @@ func NewUserRepo(db *gorm.DB) *UserRepo {
 	return &UserRepo{
 		db: db,
 	}
+}
+
+func (r *UserRepo) WithContext(ctx context.Context) *UserRepo {
+	if ctx == nil {
+		return r
+	}
+	return &UserRepo{db: r.db.WithContext(ctx)}
 }
 
 // 创建一个用户

@@ -4,6 +4,7 @@ import (
 	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/repository"
+	"context"
 	"errors"
 	"fmt"
 
@@ -35,6 +36,19 @@ func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo) *OrderSer
 		orderRepo:   repository.NewOrderRepo(db),
 		paymentRepo: repository.NewPaymentRepo(db),
 		productRepo: productRepo,
+	}
+}
+
+func (s *OrderService) WithContext(ctx context.Context) *OrderService {
+	if ctx == nil {
+		return s
+	}
+	ctxDB := s.db.WithContext(ctx)
+	return &OrderService{
+		db:          ctxDB,
+		orderRepo:   s.orderRepo.WithContext(ctx),
+		paymentRepo: s.paymentRepo.WithContext(ctx),
+		productRepo: s.productRepo.WithContext(ctx),
 	}
 }
 

@@ -47,6 +47,7 @@ type UpdateProfileReq struct {
 // @Router /register [post]
 func (h *UserHandler) Register(c *gin.Context) {
 	appG := app.Gin{C: c}
+	svc := h.svc.WithContext(c.Request.Context())
 
 	var req RegisterReq
 	// 1. 参数校验
@@ -56,7 +57,7 @@ func (h *UserHandler) Register(c *gin.Context) {
 	}
 
 	// 2. 调用业务逻辑
-	if err := h.svc.Register(req.Username, req.Password); err != nil {
+	if err := svc.Register(req.Username, req.Password); err != nil {
 		if errors.Is(err, service.ErrUserExited) {
 			appG.Error(http.StatusOK, e.ERROR_EXIST_USER)
 			return
@@ -81,6 +82,7 @@ func (h *UserHandler) Register(c *gin.Context) {
 // @Router /login [post]
 func (h *UserHandler) Login(c *gin.Context) {
 	appG := app.Gin{C: c}
+	svc := h.svc.WithContext(c.Request.Context())
 
 	var req RegisterReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -88,7 +90,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	access, refresh, err := h.svc.Login(req.Username, req.Password)
+	access, refresh, err := svc.Login(req.Username, req.Password)
 	switch {
 	case errors.Is(err, service.ErrUserNotFound):
 		appG.Error(http.StatusUnauthorized, e.ERROR_NOT_EXIST_USER)
@@ -118,6 +120,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 // @Router /profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	appG := app.Gin{C: c}
+	svc := h.svc.WithContext(c.Request.Context())
 
 	userID, exists := c.Get("userID")
 	if !exists {
@@ -125,7 +128,7 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
-	user, err := h.svc.GetProfile(userID.(uint))
+	user, err := svc.GetProfile(userID.(uint))
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
@@ -147,6 +150,7 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 // @Router /refresh [post]
 func (h *UserHandler) Refresh(c *gin.Context) {
 	appG := app.Gin{C: c}
+	svc := h.svc.WithContext(c.Request.Context())
 
 	var req RefreshReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -154,7 +158,7 @@ func (h *UserHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	token, err := h.svc.Refresh(req.RefreshToken)
+	token, err := svc.Refresh(req.RefreshToken)
 	switch {
 	case errors.Is(err, service.ErrTokenInvalid), errors.Is(err, service.ErrTokenExpired):
 		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
@@ -183,6 +187,7 @@ func (h *UserHandler) Refresh(c *gin.Context) {
 // @Router /profile [put]
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	appG := app.Gin{C: c}
+	svc := h.svc.WithContext(c.Request.Context())
 	userID, exists := c.Get("userID")
 	if !exists {
 		appG.Error(http.StatusUnauthorized, e.ERROR_NOT_EXIST_USER)
@@ -200,7 +205,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	user, err := h.svc.UpdateProfile(userID.(uint), req.Username, req.Avatar)
+	user, err := svc.UpdateProfile(userID.(uint), req.Username, req.Avatar)
 	switch {
 	case errors.Is(err, service.ErrUserExited):
 		appG.Error(http.StatusOK, e.ERROR_EXIST_USER)

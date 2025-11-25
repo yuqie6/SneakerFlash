@@ -4,6 +4,7 @@ import (
 	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/repository"
+	"context"
 	"errors"
 	"fmt"
 
@@ -27,6 +28,13 @@ func NewUserService(repo *repository.UserRepo) *UserService {
 	return &UserService{
 		repo: repo,
 	}
+}
+
+func (s *UserService) WithContext(ctx context.Context) *UserService {
+	if ctx == nil {
+		return s
+	}
+	return &UserService{repo: s.repo.WithContext(ctx)}
 }
 
 // Register 注册用户，直接插入并依赖唯一键防重，密码使用哈希存储。

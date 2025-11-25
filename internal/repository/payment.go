@@ -2,6 +2,7 @@ package repository
 
 import (
 	"SneakerFlash/internal/model"
+	"context"
 	"errors"
 	"time"
 
@@ -17,6 +18,13 @@ func NewPaymentRepo(db *gorm.DB) *PaymentRepo {
 	return &PaymentRepo{
 		db: db,
 	}
+}
+
+func (r *PaymentRepo) WithContext(ctx context.Context) *PaymentRepo {
+	if ctx == nil {
+		return r
+	}
+	return &PaymentRepo{db: r.db.WithContext(ctx)}
 }
 
 // 基于 order_id 幂等创建支付单；已存在则直接返回

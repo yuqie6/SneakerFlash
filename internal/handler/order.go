@@ -50,6 +50,8 @@ func NewOrderHandler(orderSvc *service.OrderService, productSvc *service.Product
 // @Router /orders [post]
 func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	appG := app.Gin{C: c}
+	orderSvc := h.orderSvc.WithContext(c.Request.Context())
+	productSvc := h.productSvc.WithContext(c.Request.Context())
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -69,7 +71,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 
 	// 查询商品价格，计算支付金额（分）
-	product, err := h.productSvc.GetProductByID(req.ProductID)
+	product, err := productSvc.GetProductByID(req.ProductID)
 	if err != nil {
 		if errors.Is(err, service.ErrProductNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
 			appG.Error(http.StatusNotFound, e.ERROR_NOT_EXIST_PRODUCT)
@@ -84,7 +86,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	orderWithPayment, err := h.orderSvc.CreateOrderAndInitPayment(userID, req.ProductID, amountCents)
+	orderWithPayment, err := orderSvc.CreateOrderAndInitPayment(userID, req.ProductID, amountCents)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
@@ -110,6 +112,7 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 // @Router /orders [get]
 func (h *OrderHandler) ListOrders(c *gin.Context) {
 	appG := app.Gin{C: c}
+	orderSvc := h.orderSvc.WithContext(c.Request.Context())
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -144,7 +147,7 @@ func (h *OrderHandler) ListOrders(c *gin.Context) {
 		statusPtr = &status
 	}
 
-	orders, total, err := h.orderSvc.ListOrders(userID, statusPtr, page, size)
+	orders, total, err := orderSvc.ListOrders(userID, statusPtr, page, size)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
@@ -171,6 +174,7 @@ func (h *OrderHandler) ListOrders(c *gin.Context) {
 // @Router /orders/{id} [get]
 func (h *OrderHandler) GetOrder(c *gin.Context) {
 	appG := app.Gin{C: c}
+	orderSvc := h.orderSvc.WithContext(c.Request.Context())
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -189,7 +193,7 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
-	orderWithPayment, err := h.orderSvc.GetOrderWithPayment(userID, uint(id))
+	orderWithPayment, err := orderSvc.GetOrderWithPayment(userID, uint(id))
 	if err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
 			appG.Error(http.StatusNotFound, e.INVALID_PARAMS)
@@ -214,6 +218,7 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 // @Router /payment/callback [post]
 func (h *OrderHandler) PaymentCallback(c *gin.Context) {
 	appG := app.Gin{C: c}
+	orderSvc := h.orderSvc.WithContext(c.Request.Context())
 
 	var req PaymentCallbackReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -234,7 +239,7 @@ func (h *OrderHandler) PaymentCallback(c *gin.Context) {
 		return
 	}
 
-	orderWithPayment, err := h.orderSvc.HandlePaymentResult(req.PaymentID, targetStatus, req.NotifyData)
+	orderWithPayment, err := orderSvc.HandlePaymentResult(req.PaymentID, targetStatus, req.NotifyData)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPaymentNotFound):

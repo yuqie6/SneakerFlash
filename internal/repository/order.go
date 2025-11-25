@@ -2,6 +2,7 @@ package repository
 
 import (
 	"SneakerFlash/internal/model"
+	"context"
 
 	"gorm.io/gorm"
 )
@@ -15,6 +16,13 @@ func NewOrderRepo(db *gorm.DB) *OrderRepo {
 	return &OrderRepo{
 		db: db,
 	}
+}
+
+func (r *OrderRepo) WithContext(ctx context.Context) *OrderRepo {
+	if ctx == nil {
+		return r
+	}
+	return &OrderRepo{db: r.db.WithContext(ctx)}
 }
 
 func (r *OrderRepo) Create(order *model.Order) error {

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"SneakerFlash/internal/model"
+	"context"
 
 	"gorm.io/gorm"
 )
@@ -15,6 +16,13 @@ func NewProductRepo(db *gorm.DB) *ProductRepo {
 	return &ProductRepo{
 		db: db,
 	}
+}
+
+func (r *ProductRepo) WithContext(ctx context.Context) *ProductRepo {
+	if ctx == nil {
+		return r
+	}
+	return &ProductRepo{db: r.db.WithContext(ctx)}
 }
 
 // GetByID 根据 ID 获取商品详情。

@@ -19,7 +19,7 @@ import (
 type ProductService struct {
 	repo *repository.ProductRepo
 	// 归并重复请求, 防止缓存击穿
-	sf singleflight.Group
+	sf *singleflight.Group
 }
 
 var (
@@ -30,6 +30,17 @@ var (
 func NewProductService(repo *repository.ProductRepo) *ProductService {
 	return &ProductService{
 		repo: repo,
+		sf:   &singleflight.Group{},
+	}
+}
+
+func (s *ProductService) WithContext(ctx context.Context) *ProductService {
+	if ctx == nil {
+		return s
+	}
+	return &ProductService{
+		repo: s.repo.WithContext(ctx),
+		sf:   s.sf,
 	}
 }
 
