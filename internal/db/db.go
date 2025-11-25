@@ -87,6 +87,7 @@ func MakeMigrate() {
 		&model.Payment{},
 		&model.Coupon{},
 		&model.UserCoupon{},
+		&model.PaidVIP{},
 	)
 
 	if err != nil {

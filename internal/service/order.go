@@ -104,14 +104,14 @@ func (s *OrderService) CreateOrderAndInitPayment(userID, productID uint, amountC
 		// 创建或复用支付单（单订单唯一支付单）
 		finalAmount := amountCents
 		var appliedCoupon *model.UserCoupon
-	if couponID != nil {
-		uc, _, discounted, cErr := txCouponSvc.ApplyCoupon(userID, *couponID, amountCents)
-		if cErr != nil {
-			return cErr
+		if couponID != nil {
+			uc, _, discounted, cErr := txCouponSvc.ApplyCoupon(userID, *couponID, amountCents)
+			if cErr != nil {
+				return cErr
+			}
+			finalAmount = discounted
+			appliedCoupon = uc
 		}
-		finalAmount = discounted
-		appliedCoupon = uc
-	}
 
 		paymentID, genErr := utils.GenSnowflakeID()
 		if genErr != nil {
@@ -262,29 +262,29 @@ func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.
 		if err != nil {
 			return err
 		}
-	if targetStatus == model.PaymentStatusPaid {
-		if product, pErr := txProductRepo.GetByID(order.ProductID); pErr == nil {
-			// 异步刷新缓存库存
-			refreshStockCacheAsync(product.ID, product.Stock)
-			go invalidateProductInfoCache(product.ID)
+		if targetStatus == model.PaymentStatusPaid {
+			if product, pErr := txProductRepo.GetByID(order.ProductID); pErr == nil {
+				// 异步刷新缓存库存
+				refreshStockCacheAsync(product.ID, product.Stock)
+				go invalidateProductInfoCache(product.ID)
+			}
+			// 成长值累积：按支付金额计算成长等级
+			txUserRepo := repository.NewUserRepo(tx)
+			user, uErr := txUserRepo.GetByIDForUpdate(order.UserID)
+			if uErr != nil {
+				return uErr
+			}
+			newTotal := user.TotalSpentCents + payment.AmountCents
+			newLevel := vip.CalcGrowthLevel(newTotal)
+			if uErr := txUserRepo.UpdateGrowth(order.UserID, newTotal, newLevel); uErr != nil {
+				return uErr
+			}
+		} else {
+			// 支付失败/退款则释放已占用的优惠券，避免用户券被锁死
+			if releaseErr := txUserCouponRepo.ReleaseByOrder(order.ID); releaseErr != nil {
+				return releaseErr
+			}
 		}
-		// 成长值累积：按支付金额计算成长等级
-		txUserRepo := repository.NewUserRepo(tx)
-		user, uErr := txUserRepo.GetByIDForUpdate(order.UserID)
-		if uErr != nil {
-			return uErr
-		}
-		newTotal := user.TotalSpentCents + payment.AmountCents
-		newLevel := vip.CalcGrowthLevel(newTotal)
-		if uErr := txUserRepo.UpdateGrowth(order.UserID, newTotal, newLevel); uErr != nil {
-			return uErr
-		}
-	} else {
-		// 支付失败/退款则释放已占用的优惠券，避免用户券被锁死
-		if releaseErr := txUserCouponRepo.ReleaseByOrder(order.ID); releaseErr != nil {
-			return releaseErr
-		}
-	}
 		result = OrderWithPayment{
 			Order:   order,
 			Payment: updatedPayment,
