@@ -35,15 +35,16 @@ type JWTConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host        string `mapstructure:"host"`
-	Port        int    `mapstructure:"port"`
-	User        string `mapstructure:"user"`
-	Password    string `mapstructure:"password"`
-	DBname      string `mapstructure:"dbname"`
-	LogLever    int    `mapstructure:"log_lever"`
-	MaxIdle     int    `mapstructure:"max_idle"`
-	MaxOpen     int    `mapstructure:"max_open"`
-	MaxLifetime int    `mapstructure:"max_lifetime"`
+	Host            string `mapstructure:"host"`
+	Port            int    `mapstructure:"port"`
+	User            string `mapstructure:"user"`
+	Password        string `mapstructure:"password"`
+	DBname          string `mapstructure:"dbname"`
+	LogLever        int    `mapstructure:"log_lever"`
+	MaxIdle         int    `mapstructure:"max_idle"`
+	MaxOpen         int    `mapstructure:"max_open"`
+	MaxLifetime     int    `mapstructure:"max_lifetime"`
+	SlowThresholdMs int    `mapstructure:"slow_threshold_ms"`
 }
 
 type RedisConfig struct {

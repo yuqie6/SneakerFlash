@@ -1,9 +1,13 @@
 package middlerware
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"SneakerFlash/internal/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,6 +18,14 @@ func SlogMiddlerware() gin.HandlerFunc {
 		startTime := time.Now()
 		path := c.Request.URL.Path
 		query := c.Request.URL.RawQuery
+		requestID := generateRequestID()
+
+		ctx := logger.ContextWithAttrs(
+			c.Request.Context(),
+			slog.String("request_id", requestID),
+		)
+		c.Request = c.Request.WithContext(ctx)
+		c.Set("request_id", requestID)
 
 		c.Next()
 
@@ -25,6 +37,7 @@ func SlogMiddlerware() gin.HandlerFunc {
 		}
 
 		attrs := []slog.Attr{
+			slog.String("request_id", requestID),
 			slog.Int("status", status),
 			slog.String("method", c.Request.Method),
 			slog.String("path", path),
@@ -53,6 +66,14 @@ func SlogMiddlerware() gin.HandlerFunc {
 			level = slog.LevelWarn
 		}
 
-		slog.Default().LogAttrs(c.Request.Context(), level, "HTTP request", attrs...)
+		slog.Default().LogAttrs(ctx, level, "HTTP request", attrs...)
 	}
+}
+
+func generateRequestID() string {
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		return hex.EncodeToString(b[:])
+	}
+	return hex.EncodeToString([]byte(time.Now().Format("150405.000000000")))
 }

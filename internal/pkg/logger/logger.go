@@ -42,16 +42,16 @@ func InitLogger(cfg config.LoggerConfig, service string) {
 		loggerLevel = slog.LevelInfo
 	}
 
-	jsonHandler := slog.NewJSONHandler(fileWriter, &slog.HandlerOptions{
+	jsonHandler := newContextHandler(slog.NewJSONHandler(fileWriter, &slog.HandlerOptions{
 		Level:     loggerLevel,
 		AddSource: true,
-	})
+	}))
 
 	if loggerLevel == slog.LevelDebug {
-		consoleHandler := newConsoleHandler(os.Stdout, &slog.HandlerOptions{
+		consoleHandler := newContextHandler(newConsoleHandler(os.Stdout, &slog.HandlerOptions{
 			Level:     loggerLevel,
 			AddSource: true,
-		})
+		}))
 		slog.SetDefault(slog.New(newMultiHandler(jsonHandler, consoleHandler)))
 		return
 	}
@@ -105,6 +105,37 @@ func (m *multiHandler) WithGroup(name string) slog.Handler {
 		handlers = append(handlers, h.WithGroup(name))
 	}
 	return &multiHandler{handlers: handlers}
+}
+
+type contextHandler struct {
+	next slog.Handler
+}
+
+func newContextHandler(h slog.Handler) slog.Handler {
+	if h == nil {
+		return nil
+	}
+	return &contextHandler{next: h}
+}
+
+func (c *contextHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return c.next.Enabled(ctx, level)
+}
+
+func (c *contextHandler) Handle(ctx context.Context, r slog.Record) error {
+	if attrs := contextAttrs(ctx); len(attrs) > 0 {
+		r = r.Clone()
+		r.AddAttrs(attrs...)
+	}
+	return c.next.Handle(ctx, r)
+}
+
+func (c *contextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &contextHandler{next: c.next.WithAttrs(attrs)}
+}
+
+func (c *contextHandler) WithGroup(name string) slog.Handler {
+	return &contextHandler{next: c.next.WithGroup(name)}
 }
 
 type consoleHandler struct {

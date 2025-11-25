@@ -3,13 +3,14 @@ package service
 import (
 	"SneakerFlash/internal/infra/redis"
 	"SneakerFlash/internal/model"
+	"SneakerFlash/internal/pkg/logger"
 	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/repository"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"gorm.io/gorm"
 )
@@ -39,8 +40,15 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		return err
 	}
 
+	logCtx := logger.ContextWithValues(
+		context.Background(),
+		"user_id", msg.UserID,
+		"product_id", msg.ProductID,
+		"order_num", msg.OrderNum,
+	)
+
 	// 2. 开启数据事务
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(logCtx).Transaction(func(tx *gorm.DB) error {
 		// 构建支持事务的 repo
 		txProductRepo := repository.NewProductRepo(tx)
 		txOrderRepo := repository.NewOrderRepo(tx)
@@ -59,7 +67,7 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		}
 
 		if rowsAffected == 0 {
-			log.Printf("[ERROR]库存扣减失败: UserID = %d ProductID = %d", msg.UserID, msg.ProductID)
+			slog.WarnContext(logCtx, "库存扣减失败")
 			return errors.New("库存不足")
 		}
 
@@ -72,7 +80,7 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		}
 
 		if err := txOrderRepo.Create(order); err != nil {
-			log.Printf("[ERROR]创建订单失败: %v", err)
+			slog.ErrorContext(logCtx, "创建订单失败", slog.Any("err", err))
 			return err
 		}
 
@@ -99,16 +107,15 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		// 失效商品缓存，确保详情回源最新库存
 		go invalidateProductInfoCache(msg.ProductID)
 
-		log.Printf("[INFO] 创建订单成功: userID: %d productID: %d", msg.UserID, msg.ProductID)
+		slog.InfoContext(logCtx, "创建订单成功")
 		return nil
 	})
 	if err != nil {
 		// 事务失败，回滚缓存库存，避免用户库存被锁死
-		ctx := context.Background()
 		stockKey := fmt.Sprintf("product:stock:%d", msg.ProductID)
 		userSetKey := fmt.Sprintf("product:users:%d", msg.ProductID)
-		redis.RDB.Incr(ctx, stockKey)
-		redis.RDB.SRem(ctx, userSetKey, msg.UserID)
+		redis.RDB.Incr(logCtx, stockKey)
+		redis.RDB.SRem(logCtx, userSetKey, msg.UserID)
 	}
 	return err
 }
