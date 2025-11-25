@@ -161,8 +161,7 @@ func (h *consoleHandler) Handle(ctx context.Context, r slog.Record) error {
 	})
 
 	if h.addSource {
-		src := r.Source()
-		if src.File != "" {
+		if src := r.Source(); src != nil && src.File != "" {
 			fmt.Fprintf(&b, " source=%s:%d", src.File, src.Line)
 		}
 	}
