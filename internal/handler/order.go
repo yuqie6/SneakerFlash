@@ -20,7 +20,8 @@ type OrderHandler struct {
 }
 
 type CreateOrderReq struct {
-	ProductID uint `json:"product_id" binding:"required"`
+	ProductID uint  `json:"product_id" binding:"required"`
+	CouponID  *uint `json:"coupon_id" binding:"omitempty"`
 }
 
 type PaymentCallbackReq struct {
@@ -86,7 +87,8 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	orderWithPayment, err := orderSvc.CreateOrderAndInitPayment(userID, req.ProductID, amountCents)
+	// 可选应用优惠券：订单服务内部校验并核销
+	orderWithPayment, err := orderSvc.CreateOrderAndInitPayment(userID, req.ProductID, amountCents, req.CouponID)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return

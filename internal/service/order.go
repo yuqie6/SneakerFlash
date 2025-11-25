@@ -3,6 +3,7 @@ package service
 import (
 	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/utils"
+	"SneakerFlash/internal/pkg/vip"
 	"SneakerFlash/internal/repository"
 	"context"
 	"errors"
@@ -22,20 +23,25 @@ type OrderService struct {
 	orderRepo   *repository.OrderRepo
 	paymentRepo *repository.PaymentRepo
 	productRepo *repository.ProductRepo
+	userRepo    *repository.UserRepo
+	couponSvc   *CouponService
 }
 
 type OrderWithPayment struct {
-	Order   *model.Order   `json:"order"`
-	Payment *model.Payment `json:"payment,omitempty"`
+	Order   *model.Order      `json:"order"`
+	Payment *model.Payment    `json:"payment,omitempty"`
+	Coupon  *model.UserCoupon `json:"coupon,omitempty"`
 }
 
 // NewOrderService 构建订单服务，聚合订单/支付/商品仓储用于事务处理。
-func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo) *OrderService {
+func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo, userRepo *repository.UserRepo) *OrderService {
 	return &OrderService{
 		db:          db,
 		orderRepo:   repository.NewOrderRepo(db),
 		paymentRepo: repository.NewPaymentRepo(db),
 		productRepo: productRepo,
+		userRepo:    userRepo,
+		couponSvc:   NewCouponService(db),
 	}
 }
 
@@ -50,16 +56,19 @@ func (s *OrderService) WithContext(ctx context.Context) *OrderService {
 		orderRepo:   s.orderRepo.WithContext(ctx),
 		paymentRepo: s.paymentRepo.WithContext(ctx),
 		productRepo: s.productRepo.WithContext(ctx),
+		userRepo:    s.userRepo.WithContext(ctx),
+		couponSvc:   s.couponSvc.WithContext(ctx),
 	}
 }
 
 // CreateOrderAndInitPayment 创建订单并确保支付单存在；按 user_id+product_id 幂等，事务内处理并发重试。
-func (s *OrderService) CreateOrderAndInitPayment(userID, productID uint, amountCents int64) (*OrderWithPayment, error) {
+func (s *OrderService) CreateOrderAndInitPayment(userID, productID uint, amountCents int64, couponID *uint) (*OrderWithPayment, error) {
 	var result OrderWithPayment
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		txOrderRepo := repository.NewOrderRepo(tx)
 		txPaymentRepo := repository.NewPaymentRepo(tx)
+		txCouponSvc := NewCouponService(tx)
 
 		// 先尝试查已有订单，满足幂等
 		order, err := txOrderRepo.GetByUserAndProduct(userID, productID)
@@ -93,6 +102,17 @@ func (s *OrderService) CreateOrderAndInitPayment(userID, productID uint, amountC
 		}
 
 		// 创建或复用支付单（单订单唯一支付单）
+		finalAmount := amountCents
+		var appliedCoupon *model.UserCoupon
+	if couponID != nil {
+		uc, _, discounted, cErr := txCouponSvc.ApplyCoupon(userID, *couponID, amountCents)
+		if cErr != nil {
+			return cErr
+		}
+		finalAmount = discounted
+		appliedCoupon = uc
+	}
+
 		paymentID, genErr := utils.GenSnowflakeID()
 		if genErr != nil {
 			return genErr
@@ -100,17 +120,23 @@ func (s *OrderService) CreateOrderAndInitPayment(userID, productID uint, amountC
 		payment := &model.Payment{
 			OrderID:     order.ID,
 			PaymentID:   paymentID,
-			AmountCents: amountCents,
+			AmountCents: finalAmount,
 			Status:      model.PaymentStatusPending,
 		}
 		payment, err = txPaymentRepo.CreateIfAbsent(payment)
 		if err != nil {
 			return err
 		}
+		if appliedCoupon != nil {
+			if err := repository.NewUserCouponRepo(tx).MarkUsed(appliedCoupon.ID, order.ID); err != nil {
+				return err
+			}
+		}
 
 		result = OrderWithPayment{
 			Order:   order,
 			Payment: payment,
+			Coupon:  appliedCoupon,
 		}
 		return nil
 	})
@@ -191,6 +217,7 @@ func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.
 		txPaymentRepo := repository.NewPaymentRepo(tx)
 		txOrderRepo := repository.NewOrderRepo(tx)
 		txProductRepo := repository.NewProductRepo(tx)
+		txUserCouponRepo := repository.NewUserCouponRepo(tx)
 
 		payment, err := txPaymentRepo.GetByPaymentID(paymentID)
 		if err != nil {
@@ -235,13 +262,29 @@ func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.
 		if err != nil {
 			return err
 		}
-		if targetStatus == model.PaymentStatusPaid {
-			if product, pErr := txProductRepo.GetByID(order.ProductID); pErr == nil {
-				// 异步刷新缓存库存
-				refreshStockCacheAsync(product.ID, product.Stock)
-				go invalidateProductInfoCache(product.ID)
-			}
+	if targetStatus == model.PaymentStatusPaid {
+		if product, pErr := txProductRepo.GetByID(order.ProductID); pErr == nil {
+			// 异步刷新缓存库存
+			refreshStockCacheAsync(product.ID, product.Stock)
+			go invalidateProductInfoCache(product.ID)
 		}
+		// 成长值累积：按支付金额计算成长等级
+		txUserRepo := repository.NewUserRepo(tx)
+		user, uErr := txUserRepo.GetByIDForUpdate(order.UserID)
+		if uErr != nil {
+			return uErr
+		}
+		newTotal := user.TotalSpentCents + payment.AmountCents
+		newLevel := vip.CalcGrowthLevel(newTotal)
+		if uErr := txUserRepo.UpdateGrowth(order.UserID, newTotal, newLevel); uErr != nil {
+			return uErr
+		}
+	} else {
+		// 支付失败/退款则释放已占用的优惠券，避免用户券被锁死
+		if releaseErr := txUserCouponRepo.ReleaseByOrder(order.ID); releaseErr != nil {
+			return releaseErr
+		}
+	}
 		result = OrderWithPayment{
 			Order:   order,
 			Payment: updatedPayment,

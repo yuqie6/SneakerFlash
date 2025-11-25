@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type UserRepo struct {
@@ -62,4 +63,22 @@ func (r *UserRepo) UpdateProfile(uid uint, values map[string]any) error {
 		return nil
 	}
 	return r.db.Model(&model.User{}).Where("id = ?", uid).Updates(values).Error
+}
+
+// GetByIDForUpdate 查询并加行级锁，避免并发成长值更新丢失。
+func (r *UserRepo) GetByIDForUpdate(id uint) (*model.User, error) {
+	var user model.User
+	if err := r.db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&user, id).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// UpdateGrowth 同步更新累计实付与成长等级。
+func (r *UserRepo) UpdateGrowth(userID uint, totalSpentCents int64, growthLevel int) error {
+	updates := map[string]any{
+		"total_spent_cents": totalSpentCents,
+		"growth_level":      growthLevel,
+	}
+	return r.db.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }

@@ -85,6 +85,8 @@ func MakeMigrate() {
 		&model.User{},
 		&model.Product{},
 		&model.Payment{},
+		&model.Coupon{},
+		&model.UserCoupon{},
 	)
 
 	if err != nil {
