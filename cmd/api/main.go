@@ -9,19 +9,23 @@
 package main
 
 import (
+	"log/slog"
+	"os"
+
+	docs "SneakerFlash/docs"
+
 	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/db"
 	"SneakerFlash/internal/infra/kafka"
 	"SneakerFlash/internal/infra/redis"
+	"SneakerFlash/internal/pkg/logger"
 	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/server"
-	"log"
-
-	docs "SneakerFlash/docs"
 )
 
 func main() {
 	config.Init()
+	logger.InitLogger(config.Conf.Logger, "api")
 
 	db.Init(config.Conf.Data.Database)
 	redis.Init(config.Conf.Data.Redis)
@@ -30,7 +34,8 @@ func main() {
 	db.MakeMigrate()
 
 	if err := utils.InitSnowflake(int64(config.Conf.Server.MachineID)); err != nil {
-		log.Fatalf("[ERROR] 初始化雪花算法失败: %v", err)
+		slog.Error("初始化雪花算法失败", slog.Any("err", err))
+		os.Exit(1)
 	}
 
 	docs.SwaggerInfo.BasePath = "/api/v1"
@@ -40,6 +45,7 @@ func main() {
 
 	r := server.NewHttpServer()
 	if err := r.Run(config.Conf.Server.Port); err != nil {
-		log.Fatalf("[ERROR] 启动失败: %v", err)
+		slog.Error("启动失败", slog.Any("err", err))
+		os.Exit(1)
 	}
 }
