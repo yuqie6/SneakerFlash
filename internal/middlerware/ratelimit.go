@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -41,7 +42,12 @@ redis.call("HSET", key, "tokens", new_tokens)
 redis.call("HSET", key, "time", now)
 redis.call("EXPIRE", key, ttl)
 
-return allowed
+-- Redis 不支持直接返回 boolean，false 会变成 nil，故转为数字 1/0
+if allowed then
+  return 1
+else
+  return 0
+end
 `
 
 // LimitConfig 定义令牌桶限流参数。
@@ -58,14 +64,21 @@ func rateLimited(c *gin.Context, msg string) {
 	c.Abort()
 }
 
-func buildKey(prefix, base string, c *gin.Context) string {
+func buildKeys(prefix, base string, c *gin.Context) []string {
+	keys := []string{fmt.Sprintf("%s:%s", prefix, base)} // 全局维度优先防爆款
 	if uidAny, ok := c.Get("userID"); ok {
-		return fmt.Sprintf("%s:uid:%v:%s", prefix, uidAny, base)
+		keys = append(keys, fmt.Sprintf("%s:uid:%v:%s", prefix, uidAny, base))
+	}
+	if dev := deviceID(c); dev != "" {
+		keys = append(keys, fmt.Sprintf("%s:dev:%s:%s", prefix, dev, base))
 	}
 	if ip := clientIP(c); ip != "" {
-		return fmt.Sprintf("%s:ip:%s:%s", prefix, ip, base)
+		keys = append(keys, fmt.Sprintf("%s:ip:%s:%s", prefix, ip, base))
 	}
-	return fmt.Sprintf("%s:%s", prefix, base)
+	if len(keys) == 0 {
+		keys = append(keys, fmt.Sprintf("%s:%s", prefix, base))
+	}
+	return keys
 }
 
 // InterfaceLimiter 针对接口路径做桶限流，优先按 userID，其次按 IP。
@@ -74,10 +87,11 @@ func InterfaceLimiter(rdb *redis.Client, cfg LimitConfig, msg string) gin.Handle
 		return func(c *gin.Context) { c.Next() }
 	}
 	return func(c *gin.Context) {
-		key := buildKey(cfg.KeyPrefix, c.FullPath(), c)
-		if ok := allow(rdb, key, cfg); !ok {
-			rateLimited(c, msg)
-			return
+		for _, key := range buildKeys(cfg.KeyPrefix, c.FullPath(), c) {
+			if ok := allow(rdb, key, cfg); !ok {
+				rateLimited(c, msg)
+				return
+			}
 		}
 		c.Next()
 	}
@@ -94,10 +108,11 @@ func ParamLimiter(rdb *redis.Client, cfg LimitConfig, param string, msg string) 
 			c.Next()
 			return
 		}
-		key := buildKey(cfg.KeyPrefix, val, c)
-		if ok := allow(rdb, key, cfg); !ok {
-			rateLimited(c, msg)
-			return
+		for _, key := range buildKeys(cfg.KeyPrefix, val, c) {
+			if ok := allow(rdb, key, cfg); !ok {
+				rateLimited(c, msg)
+				return
+			}
 		}
 		c.Next()
 	}
@@ -110,12 +125,13 @@ func allow(rdb *redis.Client, key string, cfg LimitConfig) bool {
 	if ttl <= 0 {
 		ttl = 120
 	}
-	status, err := rdb.Eval(context.Background(), redisLua, []string{key}, cfg.Rate, cfg.Burst, now, 1, ttl).Bool()
+	result, err := rdb.Eval(context.Background(), redisLua, []string{key}, cfg.Rate, cfg.Burst, now, 1, ttl).Int()
 	if err != nil {
-		// 失败时不阻断请求，避免误伤
+		// Redis 异常时记录告警，默认放行避免误杀
+		slog.Warn("限流脚本执行失败", slog.Any("err", err), slog.String("key", key))
 		return true
 	}
-	return status
+	return result == 1
 }
 
 // BlackListMiddleware 简单黑名单校验（IP/UserID），命中则直接拒绝。
@@ -144,6 +160,32 @@ func BlackListMiddleware(rdb *redis.Client) gin.HandlerFunc {
 	}
 }
 
+// GrayListMiddleware 灰名单命中直接返回限流响应，可按需插拔。
+func GrayListMiddleware(rdb *redis.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		appG := app.Gin{C: c}
+		ip := clientIP(c)
+		if ip != "" {
+			in, _ := rdb.SIsMember(context.Background(), "risk:ip:gray", ip).Result()
+			if in {
+				appG.ErrorMsg(http.StatusTooManyRequests, e.RISK_LIMITED, "灰名单限制")
+				c.Abort()
+				return
+			}
+		}
+		if uidAny, ok := c.Get("userID"); ok {
+			uid := fmt.Sprintf("%v", uidAny)
+			in, _ := rdb.SIsMember(context.Background(), "risk:user:gray", uid).Result()
+			if in {
+				appG.ErrorMsg(http.StatusTooManyRequests, e.RISK_LIMITED, "灰名单限制")
+				c.Abort()
+				return
+			}
+		}
+		c.Next()
+	}
+}
+
 func clientIP(c *gin.Context) string {
 	h := c.GetHeader("X-Forwarded-For")
 	if h != "" {
@@ -153,6 +195,17 @@ func clientIP(c *gin.Context) string {
 		}
 	}
 	return c.ClientIP()
+}
+
+// deviceID 从请求头/查询获取设备标识，作为额外限流维度。
+func deviceID(c *gin.Context) string {
+	if v := strings.TrimSpace(c.GetHeader("X-Device-ID")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(c.Query("device_id")); v != "" {
+		return v
+	}
+	return ""
 }
 
 func extractParam(c *gin.Context, name string) string {

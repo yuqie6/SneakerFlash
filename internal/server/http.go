@@ -40,6 +40,7 @@ func NewHttpServer() *gin.Engine {
 	r.Use(middlerware.SlogMiddlerware(), middlerware.SlogRecovery())
 	if config.Conf.Risk.Enable {
 		r.Use(middlerware.BlackListMiddleware(redis.RDB))
+		r.Use(middlerware.GrayListMiddleware(redis.RDB))
 	}
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://127.0.0.1:5173"},
