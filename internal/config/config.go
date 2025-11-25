@@ -13,6 +13,7 @@ type Config struct {
 	Data   DataConfig   `mapstructure:"data"`
 	JWT    JWTConfig    `mapstructure:"jwt"`
 	Risk   RiskConfig   `mapstructure:"risk"`
+	Logger LoggerConfig `mapstructure:"log"`
 }
 
 type ServerConfig struct {
@@ -57,6 +58,14 @@ type RedisConfig struct {
 type KafkaConfig struct {
 	Brokers []string `mapstructure:"brokers"`
 	Topic   string   `mapstructure:"topic"`
+}
+
+type LoggerConfig struct {
+	Level      string `mapstructure:"level"`
+	Path       string `mapstructure:"path"`
+	MaxAge     int    `mapstructure:"max_age"`
+	MaxBackups int    `mapstructure:"max_backups"`
+	MaxSize    int    `mapstructure:"max_size"`
 }
 
 var Conf Config
