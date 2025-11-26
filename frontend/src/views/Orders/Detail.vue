@@ -4,7 +4,8 @@ import { useRoute, useRouter } from "vue-router"
 import MainLayout from "@/layout/MainLayout.vue"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import MagmaButton from "@/components/motion/MagmaButton.vue"
-import api from "@/lib/api"
+import ParallaxCard from "@/components/motion/ParallaxCard.vue"
+import api, { resolveAssetUrl } from "@/lib/api"
 import type { Order, OrderWithPayment } from "@/types/order"
 import type { Payment } from "@/types/payment"
 import type { Coupon } from "@/types/coupon"
@@ -54,11 +55,14 @@ const basePriceCents = computed(() => Math.round(basePrice.value * 100))
 const usableCoupons = computed(() => coupons.value.filter((c) => basePriceCents.value >= c.min_spend_cents))
 const displayCoupons = computed(() => {
   const list = [...usableCoupons.value]
-  if (currentCoupon.value && !list.some((c) => c.id === currentCoupon.value.id)) {
+  if (currentCoupon.value && !list.some((c) => c.id === currentCoupon.value!.id)) {
     list.unshift(currentCoupon.value)
   }
   return list
 })
+const productCover = computed(
+  () => resolveAssetUrl(product.value?.image) || "https://dummyimage.com/400x300/0f0f14/ffffff&text=SneakerFlash"
+)
 
 const pay = async (status: Payment["status"]) => {
   if (!payment.value) {
@@ -174,37 +178,66 @@ onMounted(fetchDetail)
         未找到订单。
       </div>
 
-      <div v-else class="relative mt-6 grid gap-6 md:grid-cols-2">
-        <Card class="border-obsidian-border/70 bg-obsidian-card/80">
-          <CardHeader>
-            <CardTitle class="text-lg">订单信息</CardTitle>
-            <CardDescription>订单状态与基础信息</CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-3 text-sm text-white/80">
-            <div class="flex items-center justify-between">
-              <span>订单号</span>
-              <span class="font-mono">{{ order?.order_num }}</span>
+      <div v-else class="relative mt-6 flex flex-col gap-6">
+        <!-- 商品信息卡片 -->
+        <Card class="overflow-hidden border-obsidian-border/70 bg-gradient-to-br from-obsidian-card via-black to-obsidian-card">
+          <div class="grid gap-6 md:grid-cols-[280px_1fr]">
+            <ParallaxCard class="m-4 mr-0 md:m-6">
+              <img :src="productCover" alt="" class="h-[200px] w-full rounded-xl object-cover md:h-[240px]" />
+            </ParallaxCard>
+            <div class="flex flex-col justify-center px-4 pb-4 md:py-6 md:pr-6">
+              <p class="text-xs uppercase tracking-[0.2em] text-magma">Product Info</p>
+              <h2 class="mt-2 text-2xl font-semibold">{{ product?.name || '商品加载中...' }}</h2>
+              <p class="mt-2 text-2xl font-semibold text-magma">{{ formatPrice(product?.price || 0) }}</p>
+              <div class="mt-4 flex flex-wrap gap-4 text-sm text-white/70">
+                <div class="flex items-center gap-2">
+                  <span class="h-2 w-2 rounded-full bg-magma"></span>
+                  <span>商品 ID: {{ order?.product_id }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="h-2 w-2 rounded-full bg-white/40"></span>
+                  <span>库存: {{ product?.stock ?? '-' }}</span>
+                </div>
+              </div>
             </div>
-            <div class="flex items-center justify-between">
-              <span>状态</span>
-              <span class="text-magma">{{ orderStatusText(order?.status) }}</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>商品 ID</span>
-              <span>{{ order?.product_id }}</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>创建时间</span>
-              <span class="text-white/60">{{ order?.created_at }}</span>
-            </div>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card class="border-obsidian-border/70 bg-gradient-to-b from-obsidian-card via-black to-obsidian-card">
-          <CardHeader>
-            <CardTitle class="text-lg">支付信息</CardTitle>
-            <CardDescription>演示支付回调，可模拟成功/失败。</CardDescription>
-          </CardHeader>
+        <div class="grid gap-6 md:grid-cols-2">
+          <!-- 订单信息卡片 -->
+          <Card class="border-obsidian-border/70 bg-obsidian-card/80">
+            <CardHeader>
+              <p class="text-xs uppercase tracking-[0.2em] text-magma">Order Info</p>
+              <CardTitle class="text-lg">订单信息</CardTitle>
+              <CardDescription>订单状态与基础信息</CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-3 text-sm text-white/80">
+              <div class="flex items-center justify-between">
+                <span>订单号</span>
+                <span class="font-mono text-xs">{{ order?.order_num }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>状态</span>
+                <span
+                  class="rounded-full border px-2 py-0.5 text-xs"
+                  :class="order?.status === 1 ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200' : order?.status === 2 ? 'border-red-500/40 bg-red-500/15 text-red-200' : 'border-magma/40 bg-magma/15 text-magma'"
+                >
+                  {{ orderStatusText(order?.status) }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>创建时间</span>
+                <span class="text-white/60">{{ order?.created_at }}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card class="border-obsidian-border/70 bg-gradient-to-b from-obsidian-card via-black to-obsidian-card">
+            <CardHeader>
+              <p class="text-xs uppercase tracking-[0.2em] text-magma">Payment</p>
+              <CardTitle class="text-lg">支付信息</CardTitle>
+              <CardDescription>演示支付回调，可模拟成功/失败。</CardDescription>
+            </CardHeader>
           <CardContent class="space-y-4 text-sm text-white/80">
             <div class="flex items-center justify-between">
               <span>支付单号</span>
@@ -279,6 +312,7 @@ onMounted(fetchDetail)
             <p class="text-xs text-white/60">实际接入时替换为支付网关；回调已做幂等，优惠券仅在待支付时可应用。</p>
           </CardContent>
         </Card>
+        </div>
       </div>
     </section>
   </MainLayout>
