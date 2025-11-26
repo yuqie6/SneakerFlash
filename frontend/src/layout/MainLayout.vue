@@ -45,6 +45,7 @@ onMounted(() => {
         </RouterLink>
         <nav class="flex items-center gap-4 text-sm text-white/80">
           <RouterLink class="transition hover:text-white" to="/">抢购大厅</RouterLink>
+          <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/vip">权益中心</RouterLink>
           <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/orders">订单中心</RouterLink>
           <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/products/publish">发布商品</RouterLink>
           <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/profile">个人中心</RouterLink>
