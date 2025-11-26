@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RouterLink, useRouter } from "vue-router"
+import { RouterLink, useRoute, useRouter } from "vue-router"
 import { computed, onMounted } from "vue"
 import { useUserStore } from "@/stores/userStore"
 import { resolveAssetUrl } from "@/lib/api"
@@ -7,6 +7,7 @@ import MagmaButton from "@/components/motion/MagmaButton.vue"
 
 const userStore = useUserStore()
 const router = useRouter()
+const route = useRoute()
 
 const isLoggedIn = computed(() => !!userStore.accessToken)
 const username = computed(() => userStore.profile?.username || "Guest")
@@ -14,6 +15,15 @@ const avatar = computed(() => {
   const name = userStore.profile?.username || "guest"
   return resolveAssetUrl(userStore.profile?.avatar) || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name)}`
 })
+
+const navBaseClass = "relative rounded-full px-3 py-1 text-sm font-medium transition"
+const activeClasses = "border border-magma/60 bg-white/10 text-white shadow-[0_10px_30px_-15px_rgba(249,115,22,0.6)]"
+const inactiveClasses = "text-white/80 hover:bg-white/5 hover:text-white"
+const isActive = (path: string) => {
+  if (path === "/") return route.path === "/"
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
+const navClass = (path: string) => [navBaseClass, isActive(path) ? activeClasses : inactiveClasses]
 
 const handleLogout = () => {
   userStore.logout()
@@ -43,14 +53,14 @@ onMounted(() => {
             <p class="text-[11px] uppercase tracking-[0.3em] text-white/60">Midnight Magma</p>
           </div>
         </RouterLink>
-        <nav class="flex items-center gap-4 text-sm text-white/80">
-          <RouterLink class="transition hover:text-white" to="/">抢购大厅</RouterLink>
-          <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/vip">权益中心</RouterLink>
-          <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/orders">订单中心</RouterLink>
-          <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/products/publish">发布商品</RouterLink>
-          <RouterLink v-if="isLoggedIn" class="transition hover:text-white" to="/profile">个人中心</RouterLink>
-          <RouterLink v-if="!isLoggedIn" class="transition hover:text-white" to="/login">登录</RouterLink>
-          <RouterLink v-if="!isLoggedIn" class="transition hover:text-white" to="/register">注册</RouterLink>
+        <nav class="flex items-center gap-3">
+          <RouterLink :class="navClass('/')" to="/">抢购大厅</RouterLink>
+          <RouterLink v-if="isLoggedIn" :class="navClass('/vip')" to="/vip">权益中心</RouterLink>
+          <RouterLink v-if="isLoggedIn" :class="navClass('/orders')" to="/orders">订单中心</RouterLink>
+          <RouterLink v-if="isLoggedIn" :class="navClass('/products/publish')" to="/products/publish">发布商品</RouterLink>
+          <RouterLink v-if="isLoggedIn" :class="navClass('/profile')" to="/profile">个人中心</RouterLink>
+          <RouterLink v-if="!isLoggedIn" :class="navClass('/login')" to="/login">登录</RouterLink>
+          <RouterLink v-if="!isLoggedIn" :class="navClass('/register')" to="/register">注册</RouterLink>
         </nav>
         <div class="flex items-center gap-3">
           <div
