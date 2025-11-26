@@ -25,6 +25,12 @@ type SeckillReq struct {
 	ProductID uint `json:"product_id" binding:"required"`
 }
 
+type SeckillResponse struct {
+	OrderNum  string `json:"order_num"`
+	OrderID   uint   `json:"order_id"`
+	PaymentID string `json:"payment_id"`
+}
+
 // Seckill 执行秒杀
 // @Summary 秒杀抢购
 // @Tags 秒杀
@@ -32,7 +38,7 @@ type SeckillReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param payload body SeckillReq true "秒杀参数"
-// @Success 200 {object} app.Response{data=OrderNumResponse}
+// @Success 200 {object} app.Response{data=SeckillResponse}
 // @Failure 400 {object} app.Response "参数错误"
 // @Failure 401 {object} app.Response "未登录"
 // @Failure 429 {object} app.Response "被限流"
@@ -59,7 +65,8 @@ func (h *SeckillHandler) Seckill(c *gin.Context) {
 	}
 
 	// 3. 调用秒杀服务
-	orderNum, err := h.svc.Seckill(userID, req.ProductID)
+	svc := h.svc.WithContext(c.Request.Context())
+	result, err := svc.Seckill(userID, req.ProductID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrSeckillRepeat):
@@ -68,6 +75,11 @@ func (h *SeckillHandler) Seckill(c *gin.Context) {
 		case errors.Is(err, service.ErrSeckillFull):
 			metrics.IncSeckillResult("sold_out")
 			appG.Error(http.StatusOK, e.ERROR_SECKILL_FULL)
+		case errors.Is(err, service.ErrSeckillNotStart):
+			metrics.IncSeckillResult("not_started")
+			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, err.Error())
+		case errors.Is(err, service.ErrProductNotFound):
+			appG.Error(http.StatusNotFound, e.ERROR_NOT_EXIST_PRODUCT)
 		case errors.Is(err, service.ErrSeckillBusy):
 			metrics.IncSeckillResult("busy")
 			appG.ErrorMsg(http.StatusServiceUnavailable, e.ERROR, err.Error())
@@ -80,5 +92,9 @@ func (h *SeckillHandler) Seckill(c *gin.Context) {
 
 	// 4. 秒杀成功
 	metrics.IncSeckillResult("success")
-	appG.Success(gin.H{"order_num": orderNum})
+	appG.Success(SeckillResponse{
+		OrderNum:  result.OrderNum,
+		OrderID:   result.OrderID,
+		PaymentID: result.PaymentID,
+	})
 }

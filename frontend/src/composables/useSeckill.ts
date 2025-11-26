@@ -6,9 +6,16 @@ import { useUserStore } from "@/stores/userStore"
 
 export type SeckillStatus = "idle" | "loading" | "success" | "failed"
 
+export type SeckillResult = {
+  order_num: string
+  order_id: number
+  payment_id?: string
+}
+
 export function useSeckill() {
   const status = ref<SeckillStatus>("idle")
   const resultMsg = ref("")
+  const result = ref<SeckillResult | null>(null)
   const router = useRouter()
   const userStore = useUserStore()
 
@@ -17,21 +24,25 @@ export function useSeckill() {
     if (!token) {
       toast.error("请先登录")
       router.push({ name: "login" })
-      return
+      return null
     }
 
     status.value = "loading"
+    result.value = null
     try {
-      const res: any = await api.post("/seckill", { product_id: productId })
+      const res = await api.post<SeckillResult, SeckillResult>("/seckill", { product_id: productId })
+      result.value = res
       status.value = "success"
       resultMsg.value = `抢购成功！订单号: ${res.order_num || ""}`
-      toast.success("GOT 'EM!", { description: "恭喜，您已成功抢购！" })
+      toast.success("GOT 'EM!", { description: "已生成支付单，正在跳转" })
+      return res
     } catch (err: any) {
       status.value = "failed"
       resultMsg.value = err?.message || "抢购失败"
       toast.error("抢购失败", { description: resultMsg.value })
+      return null
     }
   }
 
-  return { status, resultMsg, executeSeckill }
+  return { status, resultMsg, result, executeSeckill }
 }

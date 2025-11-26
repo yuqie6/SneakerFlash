@@ -2,6 +2,7 @@ package handler
 
 import (
 	"SneakerFlash/internal/model"
+	"SneakerFlash/internal/service"
 	"time"
 )
 
@@ -85,6 +86,7 @@ type OrderListResponse struct {
 
 // OrderWithPaymentResponse 订单与支付单组合响应。
 type OrderWithPaymentResponse struct {
-	Order   *model.Order     `json:"order"`
-	Payment *PaymentResponse `json:"payment,omitempty"`
+	Order   *model.Order      `json:"order"`
+	Payment *PaymentResponse  `json:"payment,omitempty"`
+	Coupon  *service.MyCoupon `json:"coupon,omitempty"`
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"gorm.io/gorm"
 )
@@ -16,6 +17,7 @@ var (
 	ErrOrderNotFound        = errors.New("订单不存在")
 	ErrPaymentNotFound      = errors.New("支付单不存在")
 	ErrUnsupportedPayStatus = errors.New("不支持的支付状态")
+	ErrOrderNotPayable      = errors.New("订单状态不可支付")
 )
 
 type OrderService struct {
@@ -28,9 +30,9 @@ type OrderService struct {
 }
 
 type OrderWithPayment struct {
-	Order   *model.Order      `json:"order"`
-	Payment *model.Payment    `json:"payment,omitempty"`
-	Coupon  *model.UserCoupon `json:"coupon,omitempty"`
+	Order   *model.Order   `json:"order"`
+	Payment *model.Payment `json:"payment,omitempty"`
+	Coupon  *MyCoupon      `json:"coupon,omitempty"`
 }
 
 // NewOrderService 构建订单服务，聚合订单/支付/商品仓储用于事务处理。
@@ -61,74 +63,111 @@ func (s *OrderService) WithContext(ctx context.Context) *OrderService {
 	}
 }
 
-// CreateOrderAndInitPayment 创建订单并确保支付单存在；按 user_id+product_id 幂等，事务内处理并发重试。
-func (s *OrderService) CreateOrderAndInitPayment(userID, productID uint, amountCents int64, couponID *uint) (*OrderWithPayment, error) {
+func toMyCoupon(uc *model.UserCoupon, c *model.Coupon) *MyCoupon {
+	if uc == nil || c == nil {
+		return nil
+	}
+	return &MyCoupon{
+		ID:            uc.ID,
+		CouponID:      uc.CouponID,
+		Type:          c.Type,
+		Title:         c.Title,
+		Description:   c.Description,
+		AmountCents:   c.AmountCents,
+		DiscountRate:  c.DiscountRate,
+		MinSpendCents: c.MinSpendCents,
+		Status:        uc.Status,
+		ValidFrom:     uc.ValidFrom,
+		ValidTo:       uc.ValidTo,
+		ObtainedFrom:  uc.ObtainedFrom,
+	}
+}
+
+// ApplyCoupon 在待支付订单上应用/更换优惠券；若 couponID 为空则移除已用优惠券。
+func (s *OrderService) ApplyCoupon(userID, orderID uint, couponID *uint) (*OrderWithPayment, error) {
 	var result OrderWithPayment
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		txOrderRepo := repository.NewOrderRepo(tx)
 		txPaymentRepo := repository.NewPaymentRepo(tx)
+		txProductRepo := repository.NewProductRepo(tx)
 		txCouponSvc := NewCouponService(tx)
+		txUserCouponRepo := repository.NewUserCouponRepo(tx)
 
-		// 先尝试查已有订单，满足幂等
-		order, err := txOrderRepo.GetByUserAndProduct(userID, productID)
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		order, err := txOrderRepo.GetByIDForUpdate(orderID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrOrderNotFound
+			}
 			return err
 		}
-
-		// 不存在则创建新订单
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			orderNum, genErr := utils.GenSnowflakeID()
-			if genErr != nil {
-				return genErr
-			}
-			order = &model.Order{
-				UserID:    userID,
-				ProductID: productID,
-				OrderNum:  orderNum,
-				Status:    model.OrderStatusUnpaid,
-			}
-			if createErr := txOrderRepo.Create(order); createErr != nil {
-				if errors.Is(createErr, gorm.ErrDuplicatedKey) {
-					// 并发创建幂等，回查已有订单
-					order, err = txOrderRepo.GetByUserAndProduct(userID, productID)
-					if err != nil {
-						return err
-					}
-				} else {
-					return createErr
-				}
-			}
+		if order.UserID != userID {
+			return ErrOrderNotFound
+		}
+		if order.Status != model.OrderStatusUnpaid {
+			return ErrOrderNotPayable
 		}
 
-		// 创建或复用支付单（单订单唯一支付单）
-		finalAmount := amountCents
-		var appliedCoupon *model.UserCoupon
+		product, err := txProductRepo.GetByID(order.ProductID)
+		if err != nil {
+			return err
+		}
+		baseAmount := int64(math.Round(product.Price * 100))
+		if baseAmount <= 0 {
+			return fmt.Errorf("invalid product price: %v", product.Price)
+		}
+
+		if _, existingErr := txUserCouponRepo.GetByOrderID(order.ID); existingErr == nil {
+			_ = txUserCouponRepo.ReleaseByOrder(order.ID)
+		}
+
+		finalAmount := baseAmount
+		var appliedUC *model.UserCoupon
+		var appliedTpl *model.Coupon
 		if couponID != nil {
-			uc, _, discounted, cErr := txCouponSvc.ApplyCoupon(userID, *couponID, amountCents)
+			uc, tpl, discounted, cErr := txCouponSvc.ApplyCoupon(userID, *couponID, baseAmount)
 			if cErr != nil {
 				return cErr
 			}
 			finalAmount = discounted
-			appliedCoupon = uc
+			appliedUC = uc
+			appliedTpl = tpl
 		}
 
-		paymentID, genErr := utils.GenSnowflakeID()
-		if genErr != nil {
-			return genErr
-		}
-		payment := &model.Payment{
-			OrderID:     order.ID,
-			PaymentID:   paymentID,
-			AmountCents: finalAmount,
-			Status:      model.PaymentStatusPending,
-		}
-		payment, err = txPaymentRepo.CreateIfAbsent(payment)
-		if err != nil {
+		payment, err := txPaymentRepo.GetByOrderID(order.ID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		if appliedCoupon != nil {
-			if err := repository.NewUserCouponRepo(tx).MarkUsed(appliedCoupon.ID, order.ID); err != nil {
+		if payment == nil {
+			paymentID, genErr := utils.GenSnowflakeID()
+			if genErr != nil {
+				return genErr
+			}
+			payment = &model.Payment{
+				OrderID:     order.ID,
+				PaymentID:   paymentID,
+				AmountCents: finalAmount,
+				Status:      model.PaymentStatusPending,
+			}
+			if _, err := txPaymentRepo.CreateIfAbsent(payment); err != nil {
+				return err
+			}
+		} else {
+			rows, err := txPaymentRepo.UpdateAmountIfPending(order.ID, finalAmount)
+			if err != nil {
+				return err
+			}
+			if rows == 0 && payment.Status != model.PaymentStatusPending {
+				return ErrOrderNotPayable
+			}
+			payment, err = txPaymentRepo.GetByOrderID(order.ID)
+			if err != nil {
+				return err
+			}
+		}
+
+		if appliedUC != nil {
+			if err := txUserCouponRepo.MarkUsed(appliedUC.ID, order.ID); err != nil {
 				return err
 			}
 		}
@@ -136,7 +175,7 @@ func (s *OrderService) CreateOrderAndInitPayment(userID, productID uint, amountC
 		result = OrderWithPayment{
 			Order:   order,
 			Payment: payment,
-			Coupon:  appliedCoupon,
+			Coupon:  toMyCoupon(appliedUC, appliedTpl),
 		}
 		return nil
 	})
@@ -193,9 +232,17 @@ func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPaym
 		payment = newPayment
 	}
 
+	var myCoupon *MyCoupon
+	if uc, ucErr := s.couponSvc.userCouponRepo.GetByOrderID(order.ID); ucErr == nil && uc != nil {
+		if tpl, tplErr := s.couponSvc.couponRepo.GetByID(uc.CouponID); tplErr == nil {
+			myCoupon = toMyCoupon(uc, tpl)
+		}
+	}
+
 	return &OrderWithPayment{
 		Order:   order,
 		Payment: payment,
+		Coupon:  myCoupon,
 	}, nil
 }
 

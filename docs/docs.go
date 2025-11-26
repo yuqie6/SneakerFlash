@@ -238,72 +238,6 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "订单"
-                ],
-                "summary": "创建订单并初始化支付",
-                "parameters": [
-                    {
-                        "description": "订单参数（可选 coupon_id）",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.CreateOrderReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/app.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/handler.OrderWithPaymentResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/app.Response"
-                        }
-                    },
-                    "401": {
-                        "description": "未登录",
-                        "schema": {
-                            "$ref": "#/definitions/app.Response"
-                        }
-                    },
-                    "404": {
-                        "description": "商品不存在",
-                        "schema": {
-                            "$ref": "#/definitions/app.Response"
-                        }
-                    }
-                }
             }
         },
         "/orders/{id}": {
@@ -362,6 +296,81 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "未找到",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/{id}/apply-coupon": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "订单"
+                ],
+                "summary": "订单应用优惠券",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订单ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "优惠券参数，coupon_id 为空表示不使用优惠券",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.ApplyCouponReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.OrderWithPaymentResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或状态不允许",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "订单不存在",
                         "schema": {
                             "$ref": "#/definitions/app.Response"
                         }
@@ -1043,7 +1052,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/handler.OrderNumResponse"
+                                            "$ref": "#/definitions/handler.SeckillResponse"
                                         }
                                     }
                                 }
@@ -1260,16 +1269,10 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.CreateOrderReq": {
+        "handler.ApplyCouponReq": {
             "type": "object",
-            "required": [
-                "product_id"
-            ],
             "properties": {
                 "coupon_id": {
-                    "type": "integer"
-                },
-                "product_id": {
                     "type": "integer"
                 }
             }
@@ -1336,17 +1339,12 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.OrderNumResponse": {
-            "type": "object",
-            "properties": {
-                "order_num": {
-                    "type": "string"
-                }
-            }
-        },
         "handler.OrderWithPaymentResponse": {
             "type": "object",
             "properties": {
+                "coupon": {
+                    "$ref": "#/definitions/service.MyCoupon"
+                },
                 "order": {
                     "$ref": "#/definitions/model.Order"
                 },
@@ -1496,6 +1494,20 @@ const docTemplate = `{
             "properties": {
                 "product_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "handler.SeckillResponse": {
+            "type": "object",
+            "properties": {
+                "order_id": {
+                    "type": "integer"
+                },
+                "order_num": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
                 }
             }
         },

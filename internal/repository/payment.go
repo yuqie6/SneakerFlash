@@ -68,6 +68,17 @@ func (r *PaymentRepo) GetByOrderID(orderID uint) (*model.Payment, error) {
 	return &payment, nil
 }
 
+// UpdateAmountIfPending 更新支付金额，仅在待支付状态下生效。
+func (r *PaymentRepo) UpdateAmountIfPending(orderID uint, amountCents int64) (int64, error) {
+	tx := r.db.Model(&model.Payment{}).
+		Where("order_id = ? AND status = ?", orderID, model.PaymentStatusPending).
+		Updates(map[string]any{
+			"amount_cents": amountCents,
+			"updated_at":   time.Now(),
+		})
+	return tx.RowsAffected, tx.Error
+}
+
 // 条件更新支付状态（按支付号+当前状态），用于回调幂等；返回影响行数
 func (r *PaymentRepo) UpdateStatusByPaymentIDIfMatch(paymentID string, fromStatus model.PaymentStatus, toStatus model.PaymentStatus, notifyData string) (int64, error) {
 	updates := map[string]any{

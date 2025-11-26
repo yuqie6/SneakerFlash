@@ -6,7 +6,6 @@ import (
 	"SneakerFlash/internal/pkg/e"
 	"SneakerFlash/internal/service"
 	"errors"
-	"math"
 	"net/http"
 	"strconv"
 
@@ -15,13 +14,7 @@ import (
 )
 
 type OrderHandler struct {
-	orderSvc   *service.OrderService
-	productSvc *service.ProductService
-}
-
-type CreateOrderReq struct {
-	ProductID uint  `json:"product_id" binding:"required"`
-	CouponID  *uint `json:"coupon_id" binding:"omitempty"`
+	orderSvc *service.OrderService
 }
 
 type PaymentCallbackReq struct {
@@ -30,74 +23,14 @@ type PaymentCallbackReq struct {
 	NotifyData string `json:"notify_data"`
 }
 
-func NewOrderHandler(orderSvc *service.OrderService, productSvc *service.ProductService) *OrderHandler {
-	return &OrderHandler{
-		orderSvc:   orderSvc,
-		productSvc: productSvc,
-	}
+type ApplyCouponReq struct {
+	CouponID *uint `json:"coupon_id" binding:"omitempty"`
 }
 
-// CreateOrder 创建订单并初始化支付单（幂等：user+product）
-// @Summary 创建订单并初始化支付
-// @Tags 订单
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param payload body CreateOrderReq true "订单参数（可选 coupon_id）"
-// @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
-// @Failure 400 {object} app.Response "参数错误"
-// @Failure 401 {object} app.Response "未登录"
-// @Failure 404 {object} app.Response "商品不存在"
-// @Router /orders [post]
-func (h *OrderHandler) CreateOrder(c *gin.Context) {
-	appG := app.Gin{C: c}
-	orderSvc := h.orderSvc.WithContext(c.Request.Context())
-	productSvc := h.productSvc.WithContext(c.Request.Context())
-
-	userIDAny, exists := c.Get("userID")
-	if !exists {
-		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
-		return
+func NewOrderHandler(orderSvc *service.OrderService) *OrderHandler {
+	return &OrderHandler{
+		orderSvc: orderSvc,
 	}
-	userID, ok := userIDAny.(uint)
-	if !ok {
-		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
-		return
-	}
-
-	var req CreateOrderReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
-		return
-	}
-
-	// 查询商品价格，计算支付金额（分）
-	product, err := productSvc.GetProductByID(req.ProductID)
-	if err != nil {
-		if errors.Is(err, service.ErrProductNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
-			appG.Error(http.StatusNotFound, e.ERROR_NOT_EXIST_PRODUCT)
-			return
-		}
-		appG.Error(http.StatusInternalServerError, e.ERROR)
-		return
-	}
-	amountCents := int64(math.Round(product.Price * 100))
-	if amountCents <= 0 {
-		appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "商品价格异常")
-		return
-	}
-
-	// 可选应用优惠券：订单服务内部校验并核销
-	orderWithPayment, err := orderSvc.CreateOrderAndInitPayment(userID, req.ProductID, amountCents, req.CouponID)
-	if err != nil {
-		appG.Error(http.StatusInternalServerError, e.ERROR)
-		return
-	}
-
-	appG.Success(gin.H{
-		"order":   orderWithPayment.Order,
-		"payment": orderWithPayment.Payment,
-	})
 }
 
 // ListOrders 订单列表
@@ -206,6 +139,63 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 	}
 
 	appG.Success(orderWithPayment)
+}
+
+// ApplyCoupon 在订单支付前应用/更换优惠券
+// @Summary 订单应用优惠券
+// @Tags 订单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "订单ID"
+// @Param payload body ApplyCouponReq true "优惠券参数，coupon_id 为空表示不使用优惠券"
+// @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
+// @Failure 400 {object} app.Response "参数错误或状态不允许"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 404 {object} app.Response "订单不存在"
+// @Router /orders/{id}/apply-coupon [post]
+func (h *OrderHandler) ApplyCoupon(c *gin.Context) {
+	appG := app.Gin{C: c}
+	orderSvc := h.orderSvc.WithContext(c.Request.Context())
+
+	userIDAny, exists := c.Get("userID")
+	if !exists {
+		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		return
+	}
+	userID, ok := userIDAny.(uint)
+	if !ok {
+		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		return
+	}
+
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	var req ApplyCouponReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	result, err := orderSvc.ApplyCoupon(userID, uint(id), req.CouponID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrOrderNotFound):
+			appG.Error(http.StatusNotFound, e.INVALID_PARAMS)
+		case errors.Is(err, service.ErrOrderNotPayable):
+			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "订单状态不可支付")
+		default:
+			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, err.Error())
+		}
+		return
+	}
+
+	appG.Success(result)
 }
 
 // PaymentCallback 支付回调（模拟验签已完成）

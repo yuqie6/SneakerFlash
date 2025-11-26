@@ -98,6 +98,15 @@ func (r *UserCouponRepo) ReleaseByOrder(orderID uint) error {
 		}).Error
 }
 
+// GetByOrderID 查询绑定到订单的券记录。
+func (r *UserCouponRepo) GetByOrderID(orderID uint) (*model.UserCoupon, error) {
+	var uc model.UserCoupon
+	if err := r.db.Where("order_id = ?", orderID).First(&uc).Error; err != nil {
+		return nil, err
+	}
+	return &uc, nil
+}
+
 // CountByPeriod 统计某个来源在周期内已发放数量。
 func (r *UserCouponRepo) CountByPeriod(userID uint, obtainedFrom string, start, end time.Time) (int64, error) {
 	var cnt int64

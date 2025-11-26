@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type OrderRepo struct {
@@ -33,6 +34,15 @@ func (r *OrderRepo) Create(order *model.Order) error {
 func (r *OrderRepo) GetByID(id uint) (*model.Order, error) {
 	var order model.Order
 	if err := r.db.Where("id = ?", id).First(&order).Error; err != nil {
+		return nil, err
+	}
+	return &order, nil
+}
+
+// GetByIDForUpdate 查询订单并加行级锁，适用于支付/优惠券等并发修改场景。
+func (r *OrderRepo) GetByIDForUpdate(id uint) (*model.Order, error) {
+	var order model.Order
+	if err := r.db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&order).Error; err != nil {
 		return nil, err
 	}
 	return &order, nil

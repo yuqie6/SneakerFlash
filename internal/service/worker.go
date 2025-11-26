@@ -11,9 +11,18 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"gorm.io/gorm"
 )
+
+// SeckillMessage 描述秒杀队列消息，兼容 Kafka 消费端。
+type SeckillMessage struct {
+	UserID    uint      `json:"user_id"`
+	ProductID uint      `json:"product_id"`
+	OrderNum  string    `json:"order_num"`
+	Time      time.Time `json:"time"`
+}
 
 type WorkerService struct {
 	db          *gorm.DB

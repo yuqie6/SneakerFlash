@@ -24,7 +24,7 @@ func NewHttpServer() *gin.Engine {
 	// service 层
 	userServicer := service.NewUserService(userRepo)
 	productServicer := service.NewProductService(productRepo)
-	seckillServicer := service.NewSeckillService()
+	seckillServicer := service.NewSeckillService(db.DB, productRepo)
 	orderServicer := service.NewOrderService(db.DB, productRepo, userRepo)
 	uploadServicer := service.NewUploadService(config.Conf.Server.UploadDir)
 	vipServicer := service.NewVIPService(db.DB, userRepo)
@@ -34,7 +34,7 @@ func NewHttpServer() *gin.Engine {
 	userHandler := handler.NewUserHandler(userServicer)
 	productHandler := handler.NewProductHandler(productServicer)
 	seckillHandler := handler.NewSeckillHandler(seckillServicer)
-	orderHandler := handler.NewOrderHandler(orderServicer, productServicer)
+	orderHandler := handler.NewOrderHandler(orderServicer)
 	uploadHandler := handler.NewUploadHandler(uploadServicer)
 	vipHandler := handler.NewVIPHandler(vipServicer)
 	couponHandler := handler.NewCouponHandler(couponServicer, vipServicer)
@@ -120,9 +120,9 @@ func NewHttpServer() *gin.Engine {
 			auth.POST("/seckill", seckillHandler.Seckill)
 		}
 
-		auth.POST("/orders", orderHandler.CreateOrder)
 		auth.GET("/orders", orderHandler.ListOrders)
 		auth.GET("/orders/:id", orderHandler.GetOrder)
+		auth.POST("/orders/:id/apply-coupon", orderHandler.ApplyCoupon)
 	}
 	return r
 }

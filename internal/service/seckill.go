@@ -1,18 +1,18 @@
 package service
 
 import (
-	"SneakerFlash/internal/config"
-	"SneakerFlash/internal/infra/kafka"
 	"SneakerFlash/internal/infra/redis"
+	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/utils"
+	"SneakerFlash/internal/repository"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"math"
 	"time"
 
 	_redis "github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 // lua 脚本: 原子检查库存, 扣减, 记录用户
@@ -39,29 +39,67 @@ var seckillScript = _redis.NewScript(`
 	return 1
 `)
 
-type SeckillService struct{}
+type SeckillService struct {
+	db          *gorm.DB
+	productRepo *repository.ProductRepo
+	orderRepo   *repository.OrderRepo
+	paymentRepo *repository.PaymentRepo
+}
 
-func NewSeckillService() *SeckillService {
-	return &SeckillService{}
+func NewSeckillService(db *gorm.DB, productRepo *repository.ProductRepo) *SeckillService {
+	return &SeckillService{
+		db:          db,
+		productRepo: productRepo,
+		orderRepo:   repository.NewOrderRepo(db),
+		paymentRepo: repository.NewPaymentRepo(db),
+	}
+}
+
+// WithContext 绑定请求上下文，确保事务和仓储日志携带 request_id。
+func (s *SeckillService) WithContext(ctx context.Context) *SeckillService {
+	if ctx == nil {
+		return s
+	}
+	ctxDB := s.db.WithContext(ctx)
+	return &SeckillService{
+		db:          ctxDB,
+		productRepo: s.productRepo.WithContext(ctx),
+		orderRepo:   s.orderRepo.WithContext(ctx),
+		paymentRepo: s.paymentRepo.WithContext(ctx),
+	}
 }
 
 var (
-	ErrSeckillRepeat = errors.New("您已经抢购过该商品")
-	ErrSeckillFull   = errors.New("手慢无, 商品已经售罄")
-	ErrSeckillBusy   = errors.New("系统繁忙, 请稍后重试")
+	ErrSeckillRepeat   = errors.New("您已经抢购过该商品")
+	ErrSeckillFull     = errors.New("手慢无, 商品已经售罄")
+	ErrSeckillBusy     = errors.New("系统繁忙, 请稍后重试")
+	ErrSeckillNotStart = errors.New("活动尚未开始")
 )
 
-// kafka 消息结构体
-type SeckillMessage struct {
-	UserID    uint      `json:"user_id"`
-	ProductID uint      `json:"product_id"`
-	OrderNum  string    `json:"order_num"` // 订单号
-	Time      time.Time `json:"time"`
+type SeckillResult struct {
+	OrderID   uint   `json:"order_id"`
+	OrderNum  string `json:"order_num"`
+	PaymentID string `json:"payment_id"`
 }
 
-// Seckill 秒杀扣减库存并投递 Kafka 消息；依赖 Redis 原子脚本保证幂等，发送失败会回滚库存。
-func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
+// Seckill 秒杀扣减库存并同步创建订单+支付单；Redis 原子扣减保护库存，事务失败会回滚缓存库存。
+func (s *SeckillService) Seckill(userID, productID uint) (*SeckillResult, error) {
 	ctx := context.Background()
+	if s.db != nil && s.db.Statement != nil && s.db.Statement.Context != nil {
+		ctx = s.db.Statement.Context
+	}
+
+	// 0. 校验商品存在与开始时间
+	product, err := s.productRepo.GetByID(productID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProductNotFound
+		}
+		return nil, err
+	}
+	if time.Now().Before(product.StartTime) {
+		return nil, ErrSeckillNotStart
+	}
 
 	// 1. 准备 redis key
 	stockKey := fmt.Sprintf("product:stock:%d", productID)
@@ -70,48 +108,114 @@ func (s *SeckillService) Seckill(userID, productID uint) (string, error) {
 	// 2. 执行 lua 脚本
 	res, err := seckillScript.Run(ctx, redis.RDB, []string{stockKey, userSetKey}, userID).Int()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// 3. 处理 lua 结果
 	switch res {
 	case -1:
-		return "", ErrSeckillRepeat
+		return nil, ErrSeckillRepeat
 	case 0:
-		return "", ErrSeckillFull
+		return nil, ErrSeckillFull
 	}
 
-	// 4. 抢到了, 需要给 kafka 消息, 创建订单
+	// 4. 抢到了, 创建订单与支付单
 	orderNum, err := utils.GenSnowflakeID()
 	if err != nil {
-		return "", ErrSeckillBusy
+		return nil, ErrSeckillBusy
 	}
 
-	msg := SeckillMessage{
-		UserID:    userID,
-		ProductID: productID,
-		OrderNum:  orderNum,
-		Time:      time.Now(),
-	}
+	var result SeckillResult
+	latestStock := -1
 
-	msgBytes, _ := json.Marshal(msg)
+	txErr := s.db.Transaction(func(tx *gorm.DB) error {
+		txProductRepo := repository.NewProductRepo(tx)
+		txOrderRepo := repository.NewOrderRepo(tx)
+		txPaymentRepo := repository.NewPaymentRepo(tx)
 
-	// 5. 投递给kafka
-	var sendErr error
-	for i := 0; i < 3; i++ {
-		sendErr = kafka.Send(config.Conf.Data.Kafka.Topic, string(msgBytes))
-		if sendErr == nil {
-			break
+		// 幂等：若已存在订单则直接返回
+		if existing, err := txOrderRepo.GetByUserAndProduct(userID, productID); err == nil && existing != nil {
+			payment, _ := txPaymentRepo.GetByOrderID(existing.ID)
+			paymentID := ""
+			if payment != nil {
+				paymentID = payment.PaymentID
+			}
+			result = SeckillResult{
+				OrderID:   existing.ID,
+				OrderNum:  existing.OrderNum,
+				PaymentID: paymentID,
+			}
+			return nil
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
 		}
-		time.Sleep(time.Duration(i+1) * 100 * time.Millisecond)
-	}
-	if sendErr != nil {
-		log.Printf("[ERROR] kafka 投递失败，已回滚库存: user=%d product=%d err=%v", userID, productID, sendErr)
-		// 如果 kafka 发送失败, 必须回滚 redis 库存, 暂时简单的手动添加库存, 然后删掉用户的缓存
+
+		rowsAffected, err := txProductRepo.ReduceStockDB(productID)
+		if err != nil {
+			return err
+		}
+		if rowsAffected == 0 {
+			return ErrSeckillFull
+		}
+
+		amountCents := int64(math.Round(product.Price * 100))
+		if amountCents <= 0 {
+			return ErrSeckillBusy
+		}
+
+		order := &model.Order{
+			UserID:    userID,
+			ProductID: productID,
+			OrderNum:  orderNum,
+			Status:    model.OrderStatusUnpaid,
+		}
+		if err := txOrderRepo.Create(order); err != nil {
+			return err
+		}
+
+		paymentID, err := utils.GenSnowflakeID()
+		if err != nil {
+			return err
+		}
+		payment := &model.Payment{
+			OrderID:     order.ID,
+			PaymentID:   paymentID,
+			AmountCents: amountCents,
+			Status:      model.PaymentStatusPending,
+		}
+		payment, err = txPaymentRepo.CreateIfAbsent(payment)
+		if err != nil {
+			return err
+		}
+
+		if updatedProduct, err := txProductRepo.GetByID(productID); err == nil {
+			latestStock = updatedProduct.Stock
+		}
+
+		result = SeckillResult{
+			OrderID:   order.ID,
+			OrderNum:  order.OrderNum,
+			PaymentID: payment.PaymentID,
+		}
+		return nil
+	})
+
+	if txErr != nil {
+		// 事务失败，回滚缓存库存，避免用户库存被锁死
 		redis.RDB.Incr(ctx, stockKey)
 		redis.RDB.SRem(ctx, userSetKey, userID)
 
-		return "", ErrSeckillBusy
+		if errors.Is(txErr, ErrSeckillFull) {
+			return nil, ErrSeckillFull
+		}
+		return nil, ErrSeckillBusy
 	}
-	return orderNum, nil
+
+	// 异步刷新缓存库存与商品详情
+	if latestStock >= 0 {
+		refreshStockCacheAsync(productID, latestStock)
+	}
+	go invalidateProductInfoCache(productID)
+
+	return &result, nil
 }

@@ -11,8 +11,10 @@ export interface Order {
 }
 
 import type { Payment } from "./payment"
+import type { Coupon } from "./coupon"
 
 export interface OrderWithPayment {
   order: Order
   payment?: Payment
+  coupon?: Coupon
 }
