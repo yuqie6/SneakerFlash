@@ -160,7 +160,7 @@ watch(
       return
     }
     if (!list.some((c) => c.id === selectedCouponId.value)) {
-      selectedCouponId.value = list[0].id
+      selectedCouponId.value = list[0]?.id ?? null
     }
   },
   { immediate: true }

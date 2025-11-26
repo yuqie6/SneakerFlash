@@ -4,7 +4,7 @@
     :disabled="disabled || loading"
   >
     <div
-      class="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent group-hover:animate-[shimmer_1.5s_infinite] z-10"
+      class="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent group-hover:animate-shimmer z-10"
     ></div>
     <span class="relative z-20 flex items-center justify-center gap-2">
       <svg

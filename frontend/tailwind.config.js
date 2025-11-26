@@ -27,6 +27,20 @@ export default {
       },
       animation: {
         "pulse-fast": "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "shimmer": "shimmer 1.5s infinite",
+        "shake": "shake 0.35s ease-in-out",
+      },
+      keyframes: {
+        shimmer: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+        shake: {
+          "10%, 90%": { transform: "translateX(-2px)" },
+          "20%, 80%": { transform: "translateX(3px)" },
+          "30%, 50%, 70%": { transform: "translateX(-5px)" },
+          "40%, 60%": { transform: "translateX(5px)" },
+        },
       },
     },
   },

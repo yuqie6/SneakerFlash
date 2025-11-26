@@ -8,6 +8,8 @@ type ProductListResponse = {
   page: number
 }
 
+type ProductDetailResponse = Product
+
 export const useProductStore = defineStore("product", {
   state: () => ({
     items: [] as Product[],

@@ -9,7 +9,6 @@ import api, { resolveAssetUrl, uploadImage } from "@/lib/api"
 import { toast } from "vue-sonner"
 import { formatPrice } from "@/lib/utils"
 import { useProductStore } from "@/stores/productStore"
-import type { Product } from "@/types/product"
 
 const router = useRouter()
 const productStore = useProductStore()
