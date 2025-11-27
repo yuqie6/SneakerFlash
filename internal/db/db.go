@@ -13,6 +13,8 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
+const defaultConnMaxIdleTimeSeconds = 300
+
 // 全局 Database 变量, 只和repository层交互
 var DB *gorm.DB
 
@@ -62,11 +64,23 @@ func Init(cfg config.DatabaseConfig) {
 
 	sqlDB.SetMaxIdleConns(cfg.MaxIdle)
 	sqlDB.SetMaxOpenConns(cfg.MaxOpen)
-	sqlDB.SetConnMaxLifetime(time.Duration(cfg.MaxLifetime) * time.Second)
+
+	connMaxLifetime := time.Duration(cfg.MaxLifetime) * time.Second
+	if cfg.MaxLifetime > 0 {
+		sqlDB.SetConnMaxLifetime(connMaxLifetime)
+	}
+
+	connMaxIdleTime := time.Duration(cfg.MaxIdleTime) * time.Second
+	if cfg.MaxIdleTime <= 0 {
+		connMaxIdleTime = defaultConnMaxIdleTimeSeconds * time.Second
+	}
+	sqlDB.SetConnMaxIdleTime(connMaxIdleTime)
+
 	slog.Info("连接池设置成功",
 		slog.Int("max_idle", cfg.MaxIdle),
 		slog.Int("max_open", cfg.MaxOpen),
-		slog.Int("max_lifetime", cfg.MaxLifetime),
+		slog.Int("max_lifetime_sec", int(connMaxLifetime/time.Second)),
+		slog.Int("max_idle_time_sec", int(connMaxIdleTime/time.Second)),
 	)
 
 	DB = db

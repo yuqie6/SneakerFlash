@@ -7,9 +7,10 @@ import { useUserStore } from "@/stores/userStore"
 export type SeckillStatus = "idle" | "loading" | "success" | "failed"
 
 export type SeckillResult = {
-  order_num: string
-  order_id: number
-  payment_id?: string
+	order_num: string
+	order_id?: number
+	payment_id: string
+	status: "pending" | "ready" | "failed"
 }
 
 export function useSeckill() {
@@ -29,13 +30,13 @@ export function useSeckill() {
 
     status.value = "loading"
     result.value = null
-    try {
-      const res = await api.post<SeckillResult, SeckillResult>("/seckill", { product_id: productId })
-      result.value = res
-      status.value = "success"
-      resultMsg.value = `抢购成功！订单号: ${res.order_num || ""}`
-      toast.success("GOT 'EM!", { description: "已生成支付单，正在跳转" })
-      return res
+	try {
+		const res = await api.post<SeckillResult, SeckillResult>("/seckill", { product_id: productId })
+		result.value = res
+		status.value = "success"
+		resultMsg.value = `抢购成功！订单号: ${res.order_num || ""}`
+		toast.success("GOT 'EM!", { description: res.status === "pending" ? "订单生成中，请稍候" : "已生成支付单" })
+		return res
     } catch (err: any) {
       status.value = "failed"
       resultMsg.value = err?.message || "抢购失败"

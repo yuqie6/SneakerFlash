@@ -11,7 +11,17 @@ import { useSeckill, type SeckillResult } from "@/composables/useSeckill"
 import { useCountDown } from "@/composables/useCountDown"
 import { formatPrice } from "@/lib/utils"
 import type { Product } from "@/types/product"
-import { resolveAssetUrl } from "@/lib/api"
+import type { OrderWithPayment } from "@/types/order"
+import api, { resolveAssetUrl } from "@/lib/api"
+import { toast } from "vue-sonner"
+
+type OrderPollResponse = {
+	status: "pending" | "ready" | "failed"
+	order_num: string
+	payment_id?: string
+	order?: OrderWithPayment
+	message?: string
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -19,6 +29,7 @@ const productStore = useProductStore()
 const product = ref<Product | null>(null)
 const { status, resultMsg, executeSeckill } = useSeckill()
 const pollingTimer = ref<number>()
+const orderPollTimer = ref<number>()
 const seckillResult = ref<SeckillResult | null>(null)
 
 const load = async () => {
@@ -41,6 +52,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (pollingTimer.value) clearInterval(pollingTimer.value)
+  if (orderPollTimer.value) clearInterval(orderPollTimer.value)
 })
 
 const { formatted, isStarted } = useCountDown(computed(() => product.value?.start_time || Date.now()))
@@ -56,10 +68,44 @@ const buttonState = computed(() => {
 const onSeckill = async () => {
   if (!product.value) return
   const res = await executeSeckill(product.value.id)
-  if (res?.order_id) {
-    seckillResult.value = res
+  if (!res) return
+  seckillResult.value = res
+  if (res.order_id) {
     router.push({ name: "order-detail", params: { id: res.order_id } })
+    return
   }
+  if (res.order_num) {
+    startOrderPolling(res.order_num)
+  }
+}
+
+const pollOrderStatus = async (orderNum: string) => {
+  if (!orderNum) return
+  try {
+    const res = await api.get<OrderPollResponse, OrderPollResponse>(`/orders/poll/${orderNum}`)
+    if (res.status === "ready" && res.order?.order?.id) {
+      seckillResult.value = {
+        order_num: res.order.order.order_num,
+        order_id: res.order.order.id,
+        payment_id: res.order.payment?.payment_id || seckillResult.value?.payment_id || "",
+        status: "ready",
+      }
+      router.push({ name: "order-detail", params: { id: res.order.order.id } })
+      if (orderPollTimer.value) clearInterval(orderPollTimer.value)
+    } else if (res.status === "failed") {
+      toast.error(res.message || "订单生成失败")
+      if (orderPollTimer.value) clearInterval(orderPollTimer.value)
+    }
+  } catch (err: any) {
+    // 静默重试，长时间失败用户可手动刷新
+    console.error(err)
+  }
+}
+
+const startOrderPolling = (orderNum: string) => {
+  pollOrderStatus(orderNum)
+  if (orderPollTimer.value) clearInterval(orderPollTimer.value)
+  orderPollTimer.value = window.setInterval(() => pollOrderStatus(orderNum), 1500)
 }
 
 const isLoading = computed(() => status.value === "loading")
@@ -222,15 +268,19 @@ const formatDateTime = (dateStr?: string) => {
                     class="mt-4 flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm"
                   >
                     <div>
-                      <p class="font-semibold text-emerald-300">已锁定订单，前往支付</p>
+                      <p class="font-semibold text-emerald-300">
+                        {{ seckillResult.status === "pending" ? "订单生成中" : "已锁定订单，前往支付" }}
+                      </p>
                       <p class="text-xs text-white/60">订单号：{{ seckillResult.order_num }}</p>
                     </div>
                     <RouterLink
+                      v-if="seckillResult.order_id"
                       :to="`/orders/${seckillResult.order_id}`"
                       class="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-black transition hover:bg-emerald-400"
                     >
                       去支付
                     </RouterLink>
+                    <span v-else class="text-xs text-emerald-200">正在生成订单...</span>
                   </div>
                 </div>
               </CardContent>

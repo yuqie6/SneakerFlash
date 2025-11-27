@@ -54,6 +54,8 @@ func (h *ConsumerHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim s
 
 		if err != nil {
 			log.Printf("[ERROR] 消息处理失败: %v", err)
+			// 不确认 offset，等待消费组重试
+			continue
 		}
 
 		// 标记已消费

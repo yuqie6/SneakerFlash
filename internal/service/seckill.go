@@ -1,11 +1,13 @@
 package service
 
 import (
+	"SneakerFlash/internal/config"
+	"SneakerFlash/internal/infra/kafka"
 	"SneakerFlash/internal/infra/redis"
-	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/repository"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -42,16 +44,12 @@ var seckillScript = _redis.NewScript(`
 type SeckillService struct {
 	db          *gorm.DB
 	productRepo *repository.ProductRepo
-	orderRepo   *repository.OrderRepo
-	paymentRepo *repository.PaymentRepo
 }
 
 func NewSeckillService(db *gorm.DB, productRepo *repository.ProductRepo) *SeckillService {
 	return &SeckillService{
 		db:          db,
 		productRepo: productRepo,
-		orderRepo:   repository.NewOrderRepo(db),
-		paymentRepo: repository.NewPaymentRepo(db),
 	}
 }
 
@@ -64,8 +62,6 @@ func (s *SeckillService) WithContext(ctx context.Context) *SeckillService {
 	return &SeckillService{
 		db:          ctxDB,
 		productRepo: s.productRepo.WithContext(ctx),
-		orderRepo:   s.orderRepo.WithContext(ctx),
-		paymentRepo: s.paymentRepo.WithContext(ctx),
 	}
 }
 
@@ -77,12 +73,13 @@ var (
 )
 
 type SeckillResult struct {
-	OrderID   uint   `json:"order_id"`
+	OrderID   uint   `json:"order_id,omitempty"`
 	OrderNum  string `json:"order_num"`
 	PaymentID string `json:"payment_id"`
+	Status    string `json:"status"`
 }
 
-// Seckill 秒杀扣减库存并同步创建订单+支付单；Redis 原子扣减保护库存，事务失败会回滚缓存库存。
+// Seckill 秒杀扣减库存并投递消息，由 worker 落库；Redis 原子扣减保护库存，投递失败回滚库存。
 func (s *SeckillService) Seckill(userID, productID uint) (*SeckillResult, error) {
 	ctx := context.Background()
 	if s.db != nil && s.db.Statement != nil && s.db.Statement.Context != nil {
@@ -119,103 +116,53 @@ func (s *SeckillService) Seckill(userID, productID uint) (*SeckillResult, error)
 		return nil, ErrSeckillFull
 	}
 
-	// 4. 抢到了, 创建订单与支付单
+	// 4. 抢到了, 生成订单号/支付号，准备消息
 	orderNum, err := utils.GenSnowflakeID()
 	if err != nil {
 		return nil, ErrSeckillBusy
 	}
-
-	var result SeckillResult
-	latestStock := -1
-
-	txErr := s.db.Transaction(func(tx *gorm.DB) error {
-		txProductRepo := repository.NewProductRepo(tx)
-		txOrderRepo := repository.NewOrderRepo(tx)
-		txPaymentRepo := repository.NewPaymentRepo(tx)
-
-		// 幂等：若已存在订单则直接返回
-		if existing, err := txOrderRepo.GetByUserAndProduct(userID, productID); err == nil && existing != nil {
-			payment, _ := txPaymentRepo.GetByOrderID(existing.ID)
-			paymentID := ""
-			if payment != nil {
-				paymentID = payment.PaymentID
-			}
-			result = SeckillResult{
-				OrderID:   existing.ID,
-				OrderNum:  existing.OrderNum,
-				PaymentID: paymentID,
-			}
-			return nil
-		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-
-		rowsAffected, err := txProductRepo.ReduceStockDB(productID)
-		if err != nil {
-			return err
-		}
-		if rowsAffected == 0 {
-			return ErrSeckillFull
-		}
-
-		amountCents := int64(math.Round(product.Price * 100))
-		if amountCents <= 0 {
-			return ErrSeckillBusy
-		}
-
-		order := &model.Order{
-			UserID:    userID,
-			ProductID: productID,
-			OrderNum:  orderNum,
-			Status:    model.OrderStatusUnpaid,
-		}
-		if err := txOrderRepo.Create(order); err != nil {
-			return err
-		}
-
-		paymentID, err := utils.GenSnowflakeID()
-		if err != nil {
-			return err
-		}
-		payment := &model.Payment{
-			OrderID:     order.ID,
-			PaymentID:   paymentID,
-			AmountCents: amountCents,
-			Status:      model.PaymentStatusPending,
-		}
-		payment, err = txPaymentRepo.CreateIfAbsent(payment)
-		if err != nil {
-			return err
-		}
-
-		if updatedProduct, err := txProductRepo.GetByID(productID); err == nil {
-			latestStock = updatedProduct.Stock
-		}
-
-		result = SeckillResult{
-			OrderID:   order.ID,
-			OrderNum:  order.OrderNum,
-			PaymentID: payment.PaymentID,
-		}
-		return nil
-	})
-
-	if txErr != nil {
-		// 事务失败，回滚缓存库存，避免用户库存被锁死
-		redis.RDB.Incr(ctx, stockKey)
-		redis.RDB.SRem(ctx, userSetKey, userID)
-
-		if errors.Is(txErr, ErrSeckillFull) {
-			return nil, ErrSeckillFull
-		}
+	paymentID, err := utils.GenSnowflakeID()
+	if err != nil {
+		return nil, ErrSeckillBusy
+	}
+	priceCents := int64(math.Round(product.Price * 100))
+	if priceCents <= 0 {
 		return nil, ErrSeckillBusy
 	}
 
-	// 异步刷新缓存库存与商品详情
-	if latestStock >= 0 {
-		refreshStockCacheAsync(productID, latestStock)
+	msg := SeckillMessage{
+		UserID:     userID,
+		ProductID:  productID,
+		OrderNum:   orderNum,
+		PaymentID:  paymentID,
+		PriceCents: priceCents,
+		Time:       time.Now(),
 	}
+
+	msgBytes, _ := json.Marshal(msg)
+	if err := kafka.Send(config.Conf.Data.Kafka.Topic, string(msgBytes)); err != nil {
+		// 投递失败回滚 Redis 库存/用户标记，避免锁死
+		redis.RDB.Incr(ctx, stockKey)
+		redis.RDB.SRem(ctx, userSetKey, userID)
+		return nil, ErrSeckillBusy
+	}
+
+	// 预写 pending 状态，便于前端轮询
+	_ = setPendingOrder(ctx, PendingOrderCache{
+		OrderNum:   orderNum,
+		PaymentID:  paymentID,
+		ProductID:  productID,
+		UserID:     userID,
+		PriceCents: priceCents,
+		Status:     PendingStatusPending,
+	})
+
+	// 异步刷新商品缓存，确保库存变化尽快同步（worker 成功后会再刷新）
 	go invalidateProductInfoCache(productID)
 
-	return &result, nil
+	return &SeckillResult{
+		OrderNum:  orderNum,
+		PaymentID: paymentID,
+		Status:    string(PendingStatusPending),
+	}, nil
 }

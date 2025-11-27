@@ -44,6 +44,7 @@ type DatabaseConfig struct {
 	MaxIdle         int    `mapstructure:"max_idle"`
 	MaxOpen         int    `mapstructure:"max_open"`
 	MaxLifetime     int    `mapstructure:"max_lifetime"`
+	MaxIdleTime     int    `mapstructure:"max_idle_time"`
 	SlowThresholdMs int    `mapstructure:"slow_threshold_ms"`
 }
 

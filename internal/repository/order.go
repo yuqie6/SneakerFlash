@@ -39,6 +39,15 @@ func (r *OrderRepo) GetByID(id uint) (*model.Order, error) {
 	return &order, nil
 }
 
+// GetByOrderNum 根据订单号查询。
+func (r *OrderRepo) GetByOrderNum(orderNum string) (*model.Order, error) {
+	var order model.Order
+	if err := r.db.Where("order_num = ?", orderNum).First(&order).Error; err != nil {
+		return nil, err
+	}
+	return &order, nil
+}
+
 // GetByIDForUpdate 查询订单并加行级锁，适用于支付/优惠券等并发修改场景。
 func (r *OrderRepo) GetByIDForUpdate(id uint) (*model.Order, error) {
 	var order model.Order

@@ -65,21 +65,21 @@ func main() {
 			for idx := range jobs {
 				username := fmt.Sprintf("%s_%d", *prefix, idx)
 				if err := register(client, *baseURL, username, *password); err != nil {
-				results <- tokenResult{idx: idx, err: fmt.Errorf("register %s: %w", username, err)}
-				continue
-			}
-			token, err := login(client, *baseURL, username, *password)
-			if err != nil {
-				results <- tokenResult{idx: idx, err: fmt.Errorf("login %s: %w", username, err)}
-				continue
-			}
-			claim := decodeClaim(token)
-			results <- tokenResult{
-				idx:      idx,
-				token:    token,
-				userID:   claim.UserID,
-				username: claim.Username,
-			}
+					results <- tokenResult{idx: idx, err: fmt.Errorf("register %s: %w", username, err)}
+					continue
+				}
+				token, err := login(client, *baseURL, username, *password)
+				if err != nil {
+					results <- tokenResult{idx: idx, err: fmt.Errorf("login %s: %w", username, err)}
+					continue
+				}
+				claim := decodeClaim(token)
+				results <- tokenResult{
+					idx:      idx,
+					token:    token,
+					userID:   claim.UserID,
+					username: claim.Username,
+				}
 			}
 		}()
 	}

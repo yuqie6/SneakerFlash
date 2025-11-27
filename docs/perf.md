@@ -21,7 +21,7 @@ k6 run perf/k6-seckill.js
 - `USER_PREFIX` / `USER_COUNT` / `USER_PASSWORD`：压测账户前缀、数量与密码，默认 `perf_u`、`3000`、`PerfTest#123`；脚本会批量登录并仅对缺失用户注册。
 - `USER_BATCH`：批量登录/注册并发度，默认 `200`，首次跑大用户量时可适当调高减少 `setup` 时间（也可通过 `SETUP_TIMEOUT=5m` 增大超时）。
 - `SETUP_TIMEOUT`：`setup` 阶段超时时间，默认 `5m`。
-- `START_DELAY_SEC`：商品开始时间距当前的秒数，默认 `120`（建议首轮大用户量保持 >60s，避免创建商品时已过期）。
+- `START_DELAY_SEC`：商品开始时间距当前的秒数，默认 `3`（避免压测期出现“活动尚未开始”，如需等待特定时间再开抢可手动调大）。
 - `FAIL_LOG_LIMIT`：VU1 仅打印前 N 条业务失败，默认 `20`，用于快速查看失败原因。
 - `TOKEN_STRATEGY`：`round_robin`（默认，按全局迭代轮询用户，减少重复抢购）或 `random`。
 - `USE_RAMP` / `RAMP_STAGES` / `START_RATE`：启用 ramping-arrival-rate（默认关闭）。`USE_RAMP=true` 时使用 `START_RATE` 作为起始 RPS，`RAMP_STAGES` 形如 `30s:800,30s:1200,30s:1500`。

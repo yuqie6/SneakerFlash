@@ -43,18 +43,17 @@
 ## 秒杀
 - `POST /seckill`（鉴权）  
   Body：`{ "product_id": number }`  
-  成功：`code=200`，`data={"order_num": string}`。  
+  成功：`code=200`，`data={"order_num": string, "payment_id": string, "status": "pending"|"ready"}`。  
   业务失败：`code=30001`（售罄）、`30002`（重复下单）、`30003`（限流）。
 
 ## 订单 & 支付
-- `POST /orders`（鉴权）  
-  Body：`{ "product_id": number }`；幂等（user+product）。  
-  成功：`data={ "order": Order, "payment": Payment }`。
 - `GET /orders`（鉴权）  
   Query：`page` `size`，可选 `status`（0=未支付，1=已支付，2=失败）。  
   成功：`data={ items: Order[], total, page, size }`。
 - `GET /orders/:id`（鉴权，需本人）  
   成功：`data={ order: Order, payment?: Payment }`。
+- `GET /orders/poll/:order_num`（鉴权）  
+  轮询异步秒杀订单状态；pending 返回 `{status,payment_id}`，ready 返回 `{status,order}`。
 - `POST /payment/callback`  
   Body：`{ "payment_id": string, "status": "paid"|"failed"|"refunded", "notify_data"?: string }`  
   成功：`data={ order, payment }`；未找到支付单返回 `404`。

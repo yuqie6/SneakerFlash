@@ -27,8 +27,9 @@ type SeckillReq struct {
 
 type SeckillResponse struct {
 	OrderNum  string `json:"order_num"`
-	OrderID   uint   `json:"order_id"`
+	OrderID   uint   `json:"order_id,omitempty"`
 	PaymentID string `json:"payment_id"`
+	Status    string `json:"status"`
 }
 
 // Seckill 执行秒杀
@@ -96,5 +97,6 @@ func (h *SeckillHandler) Seckill(c *gin.Context) {
 		OrderNum:  result.OrderNum,
 		OrderID:   result.OrderID,
 		PaymentID: result.PaymentID,
+		Status:    result.Status,
 	})
 }

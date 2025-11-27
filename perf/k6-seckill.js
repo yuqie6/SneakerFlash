@@ -10,7 +10,7 @@ const USER_PREFIX = __ENV.USER_PREFIX || 'perf_u';
 const USER_COUNT = Number(__ENV.USER_COUNT || '3000');
 const USER_PASSWORD = __ENV.USER_PASSWORD || 'PerfTest#123';
 const USER_BATCH = Number(__ENV.USER_BATCH || '200');
-const START_DELAY_SEC = Number(__ENV.START_DELAY_SEC || '120');
+const START_DELAY_SEC = Number(__ENV.START_DELAY_SEC || '3');
 let failLogRemain = Number(__ENV.FAIL_LOG_LIMIT || '20'); // 仅 VU1 打印有限条失败日志，避免刷屏
 const TOKEN_STRATEGY = (__ENV.TOKEN_STRATEGY || 'round_robin').toLowerCase(); // round_robin | random
 const PRODUCT_STOCK = Number(__ENV.PRODUCT_STOCK || '500');
@@ -178,9 +178,11 @@ function batchRegister(userNames) {
 }
 
 export function setup() {
+  const startTime = new Date(Date.now() + START_DELAY_SEC * 1000).toISOString();
+  console.log(`秒杀开始时间: ${startTime}（延迟 ${START_DELAY_SEC}s）`);
+
   // 若提供 TOKEN_CSV，则直接读取 token 列，跳过注册/登录
   if (TOKEN_CSV) {
-    const startTime = new Date(Date.now() + START_DELAY_SEC * 1000).toISOString();
     const productId = createProduct(csvTokens[0], startTime);
     // 记录初始库存
     const detailRes = getJson(`/product/${productId}`);
@@ -210,7 +212,6 @@ export function setup() {
     return token;
   });
 
-  const startTime = new Date(Date.now() + START_DELAY_SEC * 1000).toISOString();
   const productId = createProduct(tokens[0], startTime);
 
   // 记录初始库存，便于对比压测后库存变化（仅日志，不影响流程）

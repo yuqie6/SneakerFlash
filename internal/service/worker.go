@@ -11,18 +11,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
+	"math"
 
 	"gorm.io/gorm"
 )
-
-// SeckillMessage 描述秒杀队列消息，兼容 Kafka 消费端。
-type SeckillMessage struct {
-	UserID    uint      `json:"user_id"`
-	ProductID uint      `json:"product_id"`
-	OrderNum  string    `json:"order_num"`
-	Time      time.Time `json:"time"`
-}
 
 type WorkerService struct {
 	db          *gorm.DB
@@ -56,14 +48,40 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		"order_num", msg.OrderNum,
 	)
 
+	var latestStock = -1
+	var readyOrderNum string
+	var readyOrderID uint
+	var readyPaymentID string
+
 	// 2. 开启数据事务
 	err := s.db.WithContext(logCtx).Transaction(func(tx *gorm.DB) error {
 		// 构建支持事务的 repo
 		txProductRepo := repository.NewProductRepo(tx)
 		txOrderRepo := repository.NewOrderRepo(tx)
+		txPaymentRepo := repository.NewPaymentRepo(tx)
 
-		// 幂等：若已存在订单则直接跳过（避免重复扣减库存）
+		// 幂等：优先按订单号，再按 user+product
+		if msg.OrderNum != "" {
+			if existing, err := txOrderRepo.GetByOrderNum(msg.OrderNum); err == nil && existing != nil {
+				payment, _ := txPaymentRepo.GetByOrderID(existing.ID)
+				pid := msg.PaymentID
+				if payment != nil && payment.PaymentID != "" {
+					pid = payment.PaymentID
+				}
+				readyOrderNum, readyOrderID, readyPaymentID = existing.OrderNum, existing.ID, pid
+				return nil
+			} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
+
 		if existing, err := txOrderRepo.GetByUserAndProduct(msg.UserID, msg.ProductID); err == nil && existing != nil {
+			payment, _ := txPaymentRepo.GetByOrderID(existing.ID)
+			pid := msg.PaymentID
+			if payment != nil && payment.PaymentID != "" {
+				pid = payment.PaymentID
+			}
+			readyOrderNum, readyOrderID, readyPaymentID = existing.OrderNum, existing.ID, pid
 			return nil
 		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
@@ -80,7 +98,18 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 			return errors.New("库存不足")
 		}
 
-		// 创建订单
+		amountCents := msg.PriceCents
+		if amountCents <= 0 {
+			product, pErr := txProductRepo.GetByID(msg.ProductID)
+			if pErr != nil {
+				return pErr
+			}
+			amountCents = int64(math.Round(product.Price * 100))
+		}
+		if amountCents <= 0 {
+			return errors.New("invalid price")
+		}
+
 		order := &model.Order{
 			UserID:    msg.UserID,
 			ProductID: msg.ProductID,
@@ -93,38 +122,54 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 			return err
 		}
 
-		// 创建支付单
-		product, err := txProductRepo.GetByID(msg.ProductID)
-		if err != nil {
-			return err
-		}
-		paymentID, err := utils.GenSnowflakeID()
-		if err != nil {
-			return err
+		paymentID := msg.PaymentID
+		if paymentID == "" {
+			genID, genErr := utils.GenSnowflakeID()
+			if genErr != nil {
+				return genErr
+			}
+			paymentID = genID
 		}
 		payment := &model.Payment{
 			OrderID:     order.ID,
 			PaymentID:   paymentID,
-			AmountCents: int64(product.Price * 100),
+			AmountCents: amountCents,
 			Status:      model.PaymentStatusPending,
 		}
-		txPaymentRepo := repository.NewPaymentRepo(tx)
 		if _, err := txPaymentRepo.CreateIfAbsent(payment); err != nil {
 			return err
 		}
 
-		// 失效商品缓存，确保详情回源最新库存
-		go invalidateProductInfoCache(msg.ProductID)
+		if updatedProduct, err := txProductRepo.GetByID(msg.ProductID); err == nil {
+			latestStock = updatedProduct.Stock
+		}
 
+		readyOrderNum, readyOrderID, readyPaymentID = order.OrderNum, order.ID, payment.PaymentID
 		slog.InfoContext(logCtx, "创建订单成功")
 		return nil
 	})
 	if err != nil {
-		// 事务失败，回滚缓存库存，避免用户库存被锁死
-		stockKey := fmt.Sprintf("product:stock:%d", msg.ProductID)
-		userSetKey := fmt.Sprintf("product:users:%d", msg.ProductID)
-		redis.RDB.Incr(logCtx, stockKey)
-		redis.RDB.SRem(logCtx, userSetKey, msg.UserID)
+		rollbackRedisStock(logCtx, msg.ProductID, msg.UserID)
+		markPendingOrderFailed(logCtx, msg.OrderNum, err.Error())
+		return err
 	}
-	return err
+
+	if readyOrderNum != "" {
+		markPendingOrderReady(logCtx, readyOrderNum, readyOrderID, readyPaymentID)
+	}
+
+	// 事务成功后刷新缓存/失效详情
+	if latestStock >= 0 {
+		refreshStockCacheAsync(msg.ProductID, latestStock)
+	}
+	go invalidateProductInfoCache(msg.ProductID)
+	return nil
+}
+
+// rollbackRedisStock 回补 Redis 库存并移除用户标记，避免库存锁死。
+func rollbackRedisStock(ctx context.Context, productID, userID uint) {
+	stockKey := fmt.Sprintf("product:stock:%d", productID)
+	userSetKey := fmt.Sprintf("product:users:%d", productID)
+	redis.RDB.Incr(ctx, stockKey)
+	redis.RDB.SRem(ctx, userSetKey, userID)
 }

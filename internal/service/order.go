@@ -35,6 +35,15 @@ type OrderWithPayment struct {
 	Coupon  *MyCoupon      `json:"coupon,omitempty"`
 }
 
+// OrderPollResult 描述订单轮询结果，兼容异步创建场景。
+type OrderPollResult struct {
+	Status    PendingOrderStatus `json:"status"`
+	OrderNum  string             `json:"order_num"`
+	PaymentID string             `json:"payment_id,omitempty"`
+	Order     *OrderWithPayment  `json:"order,omitempty"`
+	Message   string             `json:"message,omitempty"`
+}
+
 // NewOrderService 构建订单服务，聚合订单/支付/商品仓储用于事务处理。
 func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo, userRepo *repository.UserRepo) *OrderService {
 	return &OrderService{
@@ -215,7 +224,7 @@ func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPaym
 		if pErr != nil {
 			return nil, pErr
 		}
-		amountCents := int64(product.Price * 100)
+		amountCents := int64(math.Round(product.Price * 100))
 		paymentID, genErr := utils.GenSnowflakeID()
 		if genErr != nil {
 			return nil, genErr
@@ -244,6 +253,61 @@ func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPaym
 		Payment: payment,
 		Coupon:  myCoupon,
 	}, nil
+}
+
+// GetOrderWithPaymentByNum 根据订单号查询订单与支付单，适用于轮询接口。
+func (s *OrderService) GetOrderWithPaymentByNum(userID uint, orderNum string) (*OrderWithPayment, error) {
+	order, err := s.orderRepo.GetByOrderNum(orderNum)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOrderNotFound
+		}
+		return nil, err
+	}
+	if order.UserID != userID {
+		return nil, ErrOrderNotFound
+	}
+	return s.GetOrderWithPayment(userID, order.ID)
+}
+
+// PollOrder 查询订单创建状态，优先读取缓存的 pending/ready 状态，再回源数据库。
+func (s *OrderService) PollOrder(userID uint, orderNum string) (*OrderPollResult, error) {
+	ctx := context.Background()
+	cache, err := getPendingOrder(ctx, orderNum)
+	if err == nil && cache != nil {
+		switch cache.Status {
+		case PendingStatusPending:
+			return &OrderPollResult{Status: PendingStatusPending, OrderNum: orderNum, PaymentID: cache.PaymentID}, nil
+		case PendingStatusFailed:
+			return &OrderPollResult{Status: PendingStatusFailed, OrderNum: orderNum, Message: cache.Message}, nil
+		case PendingStatusReady:
+			if cache.OrderID > 0 {
+				order, getErr := s.GetOrderWithPayment(userID, cache.OrderID)
+				if getErr == nil {
+					pid := cache.PaymentID
+					if pid == "" && order.Payment != nil {
+						pid = order.Payment.PaymentID
+					}
+					return &OrderPollResult{Status: PendingStatusReady, OrderNum: orderNum, PaymentID: pid, Order: order}, nil
+				}
+			}
+		}
+	}
+
+	order, getErr := s.GetOrderWithPaymentByNum(userID, orderNum)
+	if getErr != nil {
+		if errors.Is(getErr, ErrOrderNotFound) {
+			return &OrderPollResult{Status: PendingStatusPending, OrderNum: orderNum}, nil
+		}
+		return nil, getErr
+	}
+
+	pid := ""
+	if order.Payment != nil {
+		pid = order.Payment.PaymentID
+	}
+
+	return &OrderPollResult{Status: PendingStatusReady, OrderNum: orderNum, PaymentID: pid, Order: order}, nil
 }
 
 // HandlePaymentResult 幂等处理支付回调：乐观锁更新支付单，条件更新订单状态，并在支付成功时刷新缓存库存。

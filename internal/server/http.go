@@ -122,6 +122,7 @@ func NewHttpServer() *gin.Engine {
 
 		auth.GET("/orders", orderHandler.ListOrders)
 		auth.GET("/orders/:id", orderHandler.GetOrder)
+		auth.GET("/orders/poll/:order_num", orderHandler.PollOrder)
 		auth.POST("/orders/:id/apply-coupon", orderHandler.ApplyCoupon)
 	}
 	return r

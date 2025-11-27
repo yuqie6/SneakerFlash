@@ -27,6 +27,14 @@ type ApplyCouponReq struct {
 	CouponID *uint `json:"coupon_id" binding:"omitempty"`
 }
 
+type PollOrderResponse struct {
+	Status    string                    `json:"status"`
+	OrderNum  string                    `json:"order_num"`
+	PaymentID string                    `json:"payment_id,omitempty"`
+	Order     *service.OrderWithPayment `json:"order,omitempty"`
+	Message   string                    `json:"message,omitempty"`
+}
+
 func NewOrderHandler(orderSvc *service.OrderService) *OrderHandler {
 	return &OrderHandler{
 		orderSvc: orderSvc,
@@ -102,7 +110,7 @@ func (h *OrderHandler) ListOrders(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "订单ID"
-// @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
+// @Success 200 {object} app.Response{data=PollOrderResponse}
 // @Failure 400 {object} app.Response "参数错误"
 // @Failure 401 {object} app.Response "未登录"
 // @Failure 404 {object} app.Response "未找到"
@@ -139,6 +147,53 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 	}
 
 	appG.Success(orderWithPayment)
+}
+
+// PollOrder 轮询订单创建状态（异步秒杀）。
+// @Summary 轮询订单创建状态
+// @Tags 订单
+// @Produce json
+// @Security BearerAuth
+// @Param order_num path string true "订单号"
+// @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Router /orders/poll/{order_num} [get]
+func (h *OrderHandler) PollOrder(c *gin.Context) {
+	appG := app.Gin{C: c}
+	orderSvc := h.orderSvc.WithContext(c.Request.Context())
+
+	userIDAny, exists := c.Get("userID")
+	if !exists {
+		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		return
+	}
+	userID, ok := userIDAny.(uint)
+	if !ok {
+		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		return
+	}
+
+	orderNum := c.Param("order_num")
+	if orderNum == "" {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	result, err := orderSvc.PollOrder(userID, orderNum)
+	if err != nil {
+		appG.Error(http.StatusInternalServerError, e.ERROR)
+		return
+	}
+
+	resp := PollOrderResponse{
+		Status:    string(result.Status),
+		OrderNum:  result.OrderNum,
+		PaymentID: result.PaymentID,
+		Order:     result.Order,
+		Message:   result.Message,
+	}
+	appG.Success(resp)
 }
 
 // ApplyCoupon 在订单支付前应用/更换优惠券
