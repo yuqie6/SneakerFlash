@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { formatPrice } from "@/lib/utils"
 import { resolveAssetUrl } from "@/lib/api"
+import type { Product } from "@/types/product"
 
 const placeholderImg = "https://dummyimage.com/900x600/0f0f14/ffffff&text=SneakerFlash"
 
@@ -27,8 +28,8 @@ const heroAvatar = computed(() => {
 })
 
 onMounted(() => {
-          productStore.fetchProducts(1, pageSize)
-        })
+  productStore.fetchProducts(1, pageSize)
+})
 
 const heroProduct = computed(() => {
   const first = Array.isArray(productStore.items) ? productStore.items[0] : undefined
@@ -43,17 +44,20 @@ const stockPercent = (stock?: number) => {
   return Math.min(100, n)
 }
 
-const safeProduct = (item: any) =>
-  item && item.id
-    ? item
-    : {
-        id: 0,
-        name: "未命名",
-        price: 0,
-        stock: 0,
-        start_time: Date.now(),
-        image: "/placeholder.svg",
-      }
+const safeProduct = (item: Partial<Product> | undefined): Product => {
+  if (item && item.id) {
+    return item as Product
+  }
+  return {
+    id: 0,
+    user_id: 0,
+    name: "未命名",
+    price: 0,
+    stock: 0,
+    start_time: new Date().toISOString(),
+    image: "/placeholder.svg",
+  }
+}
 
 const productCover = (src?: string) => resolveAssetUrl(src) || placeholderImg
 
@@ -81,29 +85,35 @@ const loadMore = () => {
             以熔岩速度，抢下你的下一双限量鞋。
           </h1>
           <p class="text-white/70">
-            实时库存，毫秒级下单反馈。黑曜石质感搭配熔岩流光，专为高压场景优化。
+            限量球鞋，先到先得。实时库存更新，抢到就是赚到。
           </p>
           <div class="flex flex-wrap gap-3">
             <template v-if="!isLoggedIn">
-              <RouterLink to="/login">
-                <MagmaButton>立即登录</MagmaButton>
+              <RouterLink v-slot="{ navigate }" to="/login" custom>
+                <MagmaButton @click="navigate">立即登录</MagmaButton>
               </RouterLink>
-              <RouterLink to="/register">
-                <button class="rounded-full border border-obsidian-border px-6 py-3 text-sm text-white transition hover:border-magma hover:text-magma">
+              <RouterLink v-slot="{ navigate }" to="/register" custom>
+                <button
+                  class="rounded-full border border-obsidian-border px-6 py-3 text-sm text-white transition hover:border-magma hover:text-magma"
+                  @click="navigate"
+                >
                   先去注册
                 </button>
               </RouterLink>
             </template>
             <template v-else>
               <div class="flex items-center gap-3 rounded-full border border-obsidian-border/70 px-4 py-2 text-sm text-white/80">
-                <img :src="heroAvatar" alt="avatar" class="h-8 w-8 rounded-full border border-obsidian-border/70 object-cover" />
+                <img :src="heroAvatar" :alt="`${displayName} avatar`" class="h-8 w-8 rounded-full border border-obsidian-border/70 object-cover" />
                 <span>欢迎回来，{{ displayName }}</span>
               </div>
-              <RouterLink to="/orders">
-                <MagmaButton>前往订单</MagmaButton>
+              <RouterLink v-slot="{ navigate }" to="/orders" custom>
+                <MagmaButton @click="navigate">前往订单</MagmaButton>
               </RouterLink>
-              <RouterLink to="/products/publish">
-                <button class="rounded-full border border-magma/70 px-6 py-3 text-sm text-magma transition hover:border-magma-dark hover:text-magma-dark">
+              <RouterLink v-slot="{ navigate }" to="/products/publish" custom>
+                <button
+                  class="rounded-full border border-magma/70 px-6 py-3 text-sm text-magma transition hover:border-magma-dark hover:text-magma-dark"
+                  @click="navigate"
+                >
                   发布新品
                 </button>
               </RouterLink>
@@ -112,18 +122,18 @@ const loadMore = () => {
           <div class="flex flex-wrap gap-4 text-sm text-white/70">
             <div class="flex items-center gap-2 rounded-full border border-obsidian-border/70 px-3 py-2">
               <Sparkles class="h-4 w-4 text-magma" />
-              物理动效
+              正品保障
             </div>
             <div class="flex items-center gap-2 rounded-full border border-obsidian-border/70 px-3 py-2">
               <Sparkles class="h-4 w-4 text-magma" />
-              毫秒反馈
+              极速发货
             </div>
           </div>
         </div>
         <div class="flex-1">
           <ParallaxCard v-if="heroProduct" class="glass">
             <div class="relative h-full w-full overflow-hidden rounded-2xl">
-              <img :src="productCover(heroProduct?.image)" alt="hero" class="h-full w-full object-cover" />
+              <img :src="productCover(heroProduct?.image)" :alt="heroProduct?.name || 'Hero Product'" class="h-full w-full object-cover" />
               <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
               <div class="absolute bottom-0 left-0 right-0 p-6">
                 <p class="text-sm text-white/70">当前抢购</p>
@@ -145,7 +155,7 @@ const loadMore = () => {
           <p class="text-sm uppercase tracking-[0.3em] text-magma">Seckill Hall</p>
           <h2 class="text-2xl font-semibold">抢购大厅</h2>
         </div>
-        <p class="text-sm text-white/60">实时库存 · 秒杀预备</p>
+        <p class="text-sm text-white/60">限量发售 · 先到先得</p>
       </div>
 
       <div v-if="productStore.loading" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -188,7 +198,7 @@ const loadMore = () => {
             <div class="relative overflow-hidden">
               <img
                 :src="productCover(safeProduct(raw).image)"
-                alt=""
+                :alt="safeProduct(raw).name"
                 class="h-52 w-full object-cover transition duration-500 hover:scale-105"
               />
               <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>

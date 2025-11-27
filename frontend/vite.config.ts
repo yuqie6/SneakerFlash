@@ -13,4 +13,15 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["vue", "vue-router", "pinia", "axios"],
+          ui: ["lucide-vue-next", "motion-v", "reka-ui", "vue-sonner"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+  },
 })

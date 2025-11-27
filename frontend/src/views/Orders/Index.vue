@@ -79,7 +79,7 @@ onMounted(fetchOrders)
         <div>
           <p class="text-sm uppercase tracking-[0.3em] text-magma">Orders</p>
           <h1 class="text-2xl font-semibold">订单中心</h1>
-          <p class="text-sm text-white/70">查看待支付/已支付订单，支持跳转详情模拟支付。</p>
+          <p class="text-sm text-white/70">查看您的全部订单，点击订单可进入详情页完成支付。</p>
         </div>
         <div class="flex items-center gap-3 text-sm">
           <button

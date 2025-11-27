@@ -254,8 +254,8 @@ const formatDateTime = (dateStr?: string) => {
                     class="w-full justify-center"
                     :loading="status === 'loading'"
                     :disabled="!isStarted || status === 'success'"
-                    @click="onSeckill"
                     :class="buttonClass"
+                    @click="onSeckill"
                   >
                     <span v-if="buttonState === 'pending'">即将开始 · {{ formatted }}</span>
                     <span v-else-if="buttonState === 'loading'">锁定中...</span>
@@ -299,7 +299,7 @@ const formatDateTime = (dateStr?: string) => {
                   <span class="mt-1 h-2 w-2 rounded-full bg-magma"></span>
                   <div>
                     <p class="font-semibold text-white">一键抢购</p>
-                    <p class="text-white/60">点击立即抢购会实时扣减库存并创建订单</p>
+                    <p class="text-white/60">点击立即抢购，成功后自动生成订单</p>
                   </div>
                 </div>
                 <div class="flex items-start gap-3">

@@ -236,7 +236,7 @@ onMounted(fetchDetail)
             <CardHeader>
               <p class="text-xs uppercase tracking-[0.2em] text-magma">Payment</p>
               <CardTitle class="text-lg">支付信息</CardTitle>
-              <CardDescription>演示支付回调，可模拟成功/失败。</CardDescription>
+              <CardDescription>确认金额并完成支付</CardDescription>
             </CardHeader>
           <CardContent class="space-y-4 text-sm text-white/80">
             <div class="flex items-center justify-between">
@@ -299,17 +299,17 @@ onMounted(fetchDetail)
 
             <div class="flex items-center gap-3 pt-2">
               <MagmaButton class="flex-1 justify-center" :loading="paying" :disabled="!isPendingPayment || paying" @click="pay('paid')">
-                模拟支付成功
+                确认支付
               </MagmaButton>
               <button
                 class="flex-1 rounded-full border border-obsidian-border px-4 py-2 text-sm text-white transition hover:border-magma hover:text-magma disabled:opacity-50"
                 :disabled="!isPendingPayment || paying"
                 @click="pay('failed')"
               >
-                模拟失败
+                取消订单
               </button>
             </div>
-            <p class="text-xs text-white/60">实际接入时替换为支付网关；回调已做幂等，优惠券仅在待支付时可应用。</p>
+            <p class="text-xs text-white/60">优惠券仅在待支付状态下可使用，支付后将自动发货。</p>
           </CardContent>
         </Card>
         </div>

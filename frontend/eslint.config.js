@@ -17,6 +17,28 @@ export default [
     },
   },
   {
+    languageOptions: {
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        console: "readonly",
+        HTMLElement: "readonly",
+        HTMLInputElement: "readonly",
+        Event: "readonly",
+        clearInterval: "readonly",
+        setInterval: "readonly",
+        setTimeout: "readonly",
+        FormData: "readonly",
+        URL: "readonly",
+        localStorage: "readonly",
+        alert: "readonly",
+        confirm: "readonly",
+        location: "readonly",
+        navigator: "readonly",
+      },
+    },
+  },
+  {
     rules: {
       "vue/multi-word-component-names": "off",
       "@typescript-eslint/no-explicit-any": "warn",

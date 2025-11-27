@@ -1,27 +1,50 @@
 import { createRouter, createWebHistory } from "vue-router"
 import Home from "@/views/Home/Index.vue"
-import Login from "@/views/Auth/Login.vue"
-import Register from "@/views/Auth/Register.vue"
-import ProductDetail from "@/views/Product/Detail.vue"
-import ProductPublish from "@/views/Product/Publish.vue"
-import Profile from "@/views/User/Profile.vue"
-import VipCenter from "@/views/User/VipCenter.vue"
-import Orders from "@/views/Orders/Index.vue"
-import OrderDetail from "@/views/Orders/Detail.vue"
 import { useUserStore } from "@/stores/userStore"
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/", name: "home", component: Home },
-    { path: "/login", name: "login", component: Login },
-    { path: "/register", name: "register", component: Register },
-    { path: "/product/:id", name: "product-detail", component: ProductDetail, props: true },
-    { path: "/products/publish", name: "product-publish", component: ProductPublish, meta: { requiresAuth: true } },
-    { path: "/profile", name: "profile", component: Profile, meta: { requiresAuth: true } },
-    { path: "/vip", name: "vip", component: VipCenter, meta: { requiresAuth: true } },
-    { path: "/orders", name: "orders", component: Orders, meta: { requiresAuth: true } },
-    { path: "/orders/:id", name: "order-detail", component: OrderDetail, meta: { requiresAuth: true }, props: true },
+    { path: "/login", name: "login", component: () => import("@/views/Auth/Login.vue") },
+    { path: "/register", name: "register", component: () => import("@/views/Auth/Register.vue") },
+    {
+      path: "/product/:id",
+      name: "product-detail",
+      component: () => import("@/views/Product/Detail.vue"),
+      props: true,
+    },
+    {
+      path: "/products/publish",
+      name: "product-publish",
+      component: () => import("@/views/Product/Publish.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/profile",
+      name: "profile",
+      component: () => import("@/views/User/Profile.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/vip",
+      name: "vip",
+      component: () => import("@/views/User/VipCenter.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/orders",
+      name: "orders",
+      component: () => import("@/views/Orders/Index.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/orders/:id",
+      name: "order-detail",
+      component: () => import("@/views/Orders/Detail.vue"),
+      meta: { requiresAuth: true },
+      props: true,
+    },
   ],
 })
 
