@@ -53,18 +53,6 @@ func NewSeckillService(db *gorm.DB, productRepo *repository.ProductRepo) *Seckil
 	}
 }
 
-// WithContext 绑定请求上下文，确保事务和仓储日志携带 request_id。
-func (s *SeckillService) WithContext(ctx context.Context) *SeckillService {
-	if ctx == nil {
-		return s
-	}
-	ctxDB := s.db.WithContext(ctx)
-	return &SeckillService{
-		db:          ctxDB,
-		productRepo: s.productRepo.WithContext(ctx),
-	}
-}
-
 var (
 	ErrSeckillRepeat   = errors.New("您已经抢购过该商品")
 	ErrSeckillFull     = errors.New("手慢无, 商品已经售罄")
@@ -80,14 +68,13 @@ type SeckillResult struct {
 }
 
 // Seckill 秒杀扣减库存并投递消息，由 worker 落库；Redis 原子扣减保护库存，投递失败回滚库存。
-func (s *SeckillService) Seckill(userID, productID uint) (*SeckillResult, error) {
-	ctx := context.Background()
-	if s.db != nil && s.db.Statement != nil && s.db.Statement.Context != nil {
-		ctx = s.db.Statement.Context
+func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*SeckillResult, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
 	}
 
 	// 0. 校验商品存在与开始时间
-	product, err := s.productRepo.GetByID(productID)
+	product, err := s.productRepo.WithContext(ctx).GetByID(productID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrProductNotFound

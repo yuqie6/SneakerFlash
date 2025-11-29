@@ -66,8 +66,7 @@ func (h *SeckillHandler) Seckill(c *gin.Context) {
 	}
 
 	// 3. 调用秒杀服务
-	svc := h.svc.WithContext(c.Request.Context())
-	result, err := svc.Seckill(userID, req.ProductID)
+	result, err := h.svc.Seckill(c.Request.Context(), userID, req.ProductID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrSeckillRepeat):

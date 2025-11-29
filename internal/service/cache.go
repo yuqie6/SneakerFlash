@@ -4,6 +4,7 @@ import (
 	"SneakerFlash/internal/infra/redis"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -32,8 +33,10 @@ type PendingOrderCache struct {
 }
 
 // setStockCache 覆盖写入商品库存缓存（秒杀读取入口）。
-func setStockCache(productID uint, stock int) error {
-	ctx := context.Background()
+func setStockCache(ctx context.Context, productID uint, stock int) error {
+	if ctx == nil {
+		return errors.New("context is nil")
+	}
 	key := fmt.Sprintf("product:stock:%d", productID)
 	return redis.RDB.Set(ctx, key, stock, 0).Err()
 }
@@ -45,7 +48,7 @@ func pendingOrderKey(orderNum string) string {
 // setPendingOrder 缓存订单处理状态。
 func setPendingOrder(ctx context.Context, payload PendingOrderCache) error {
 	if ctx == nil {
-		ctx = context.Background()
+		return errors.New("context is nil")
 	}
 	key := pendingOrderKey(payload.OrderNum)
 	data, err := json.Marshal(payload)
@@ -58,7 +61,7 @@ func setPendingOrder(ctx context.Context, payload PendingOrderCache) error {
 // getPendingOrder 读取订单处理状态缓存。
 func getPendingOrder(ctx context.Context, orderNum string) (*PendingOrderCache, error) {
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, errors.New("context is nil")
 	}
 	key := pendingOrderKey(orderNum)
 	res, err := redis.RDB.Get(ctx, key).Result()
@@ -94,12 +97,14 @@ func markPendingOrderFailed(ctx context.Context, orderNum, message string) {
 // refreshStockCacheAsync 异步刷新库存缓存，失败忽略以避免阻塞主流程。
 func refreshStockCacheAsync(productID uint, stock int) {
 	go func() {
-		_ = setStockCache(productID, stock)
+		// 异步刷新缓存，不依赖请求上下文
+		_ = setStockCache(context.Background(), productID, stock)
 	}()
 }
 
 // invalidateProductInfoCache 失效商品详情缓存，促使后续请求回源数据库。
 func invalidateProductInfoCache(productID uint) {
+	// 常在异步场景调用，使用独立 context。
 	ctx := context.Background()
 	key := fmt.Sprintf("product:info:%d", productID)
 	redis.RDB.Del(ctx, key)

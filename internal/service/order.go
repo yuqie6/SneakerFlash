@@ -56,22 +56,6 @@ func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo, userRepo 
 	}
 }
 
-// WithContext 绑定请求上下文，使事务与仓储日志携带 request_id。
-func (s *OrderService) WithContext(ctx context.Context) *OrderService {
-	if ctx == nil {
-		return s
-	}
-	ctxDB := s.db.WithContext(ctx)
-	return &OrderService{
-		db:          ctxDB,
-		orderRepo:   s.orderRepo.WithContext(ctx),
-		paymentRepo: s.paymentRepo.WithContext(ctx),
-		productRepo: s.productRepo.WithContext(ctx),
-		userRepo:    s.userRepo.WithContext(ctx),
-		couponSvc:   s.couponSvc.WithContext(ctx),
-	}
-}
-
 func toMyCoupon(uc *model.UserCoupon, c *model.Coupon) *MyCoupon {
 	if uc == nil || c == nil {
 		return nil
@@ -93,10 +77,14 @@ func toMyCoupon(uc *model.UserCoupon, c *model.Coupon) *MyCoupon {
 }
 
 // ApplyCoupon 在待支付订单上应用/更换优惠券；若 couponID 为空则移除已用优惠券。
-func (s *OrderService) ApplyCoupon(userID, orderID uint, couponID *uint) (*OrderWithPayment, error) {
+func (s *OrderService) ApplyCoupon(ctx context.Context, userID, orderID uint, couponID *uint) (*OrderWithPayment, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
+
 	var result OrderWithPayment
 
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		txOrderRepo := repository.NewOrderRepo(tx)
 		txPaymentRepo := repository.NewPaymentRepo(tx)
 		txProductRepo := repository.NewProductRepo(tx)
@@ -196,13 +184,24 @@ func (s *OrderService) ApplyCoupon(userID, orderID uint, couponID *uint) (*Order
 }
 
 // ListOrders 查询订单列表，可选状态过滤。
-func (s *OrderService) ListOrders(userID uint, status *model.OrderStatus, page, pageSize int) ([]model.Order, int64, error) {
-	return s.orderRepo.ListByUserID(userID, status, page, pageSize)
+func (s *OrderService) ListOrders(ctx context.Context, userID uint, status *model.OrderStatus, page, pageSize int) ([]model.Order, int64, error) {
+	if ctx == nil {
+		return nil, 0, fmt.Errorf("context is nil")
+	}
+	return s.orderRepo.WithContext(ctx).ListByUserID(userID, status, page, pageSize)
 }
 
 // GetOrderWithPayment 获取订单详情（含支付单），同时校验用户归属并补偿缺失的支付单。
-func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPayment, error) {
-	order, err := s.orderRepo.GetByID(orderID)
+func (s *OrderService) GetOrderWithPayment(ctx context.Context, userID, orderID uint) (*OrderWithPayment, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
+	orderRepo := s.orderRepo.WithContext(ctx)
+	paymentRepo := s.paymentRepo.WithContext(ctx)
+	productRepo := s.productRepo.WithContext(ctx)
+	couponSvc := s.couponSvc.WithContext(ctx)
+
+	order, err := orderRepo.GetByID(orderID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOrderNotFound
@@ -213,14 +212,14 @@ func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPaym
 		return nil, ErrOrderNotFound
 	}
 
-	payment, err := s.paymentRepo.GetByOrderID(orderID)
+	payment, err := paymentRepo.GetByOrderID(orderID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
 	if payment == nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		// 补偿创建支付单，避免页面缺少 payment_id
-		product, pErr := s.productRepo.GetByID(order.ProductID)
+		product, pErr := productRepo.GetByID(order.ProductID)
 		if pErr != nil {
 			return nil, pErr
 		}
@@ -235,15 +234,15 @@ func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPaym
 			AmountCents: amountCents,
 			Status:      model.PaymentStatusPending,
 		}
-		if _, cErr := s.paymentRepo.CreateIfAbsent(newPayment); cErr != nil {
+		if _, cErr := paymentRepo.CreateIfAbsent(newPayment); cErr != nil {
 			return nil, cErr
 		}
 		payment = newPayment
 	}
 
 	var myCoupon *MyCoupon
-	if uc, ucErr := s.couponSvc.userCouponRepo.GetByOrderID(order.ID); ucErr == nil && uc != nil {
-		if tpl, tplErr := s.couponSvc.couponRepo.GetByID(uc.CouponID); tplErr == nil {
+	if uc, ucErr := couponSvc.userCouponRepo.GetByOrderID(order.ID); ucErr == nil && uc != nil {
+		if tpl, tplErr := couponSvc.couponRepo.GetByID(uc.CouponID); tplErr == nil {
 			myCoupon = toMyCoupon(uc, tpl)
 		}
 	}
@@ -256,8 +255,12 @@ func (s *OrderService) GetOrderWithPayment(userID, orderID uint) (*OrderWithPaym
 }
 
 // GetOrderWithPaymentByNum 根据订单号查询订单与支付单，适用于轮询接口。
-func (s *OrderService) GetOrderWithPaymentByNum(userID uint, orderNum string) (*OrderWithPayment, error) {
-	order, err := s.orderRepo.GetByOrderNum(orderNum)
+func (s *OrderService) GetOrderWithPaymentByNum(ctx context.Context, userID uint, orderNum string) (*OrderWithPayment, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
+
+	order, err := s.orderRepo.WithContext(ctx).GetByOrderNum(orderNum)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOrderNotFound
@@ -267,12 +270,14 @@ func (s *OrderService) GetOrderWithPaymentByNum(userID uint, orderNum string) (*
 	if order.UserID != userID {
 		return nil, ErrOrderNotFound
 	}
-	return s.GetOrderWithPayment(userID, order.ID)
+	return s.GetOrderWithPayment(ctx, userID, order.ID)
 }
 
 // PollOrder 查询订单创建状态，优先读取缓存的 pending/ready 状态，再回源数据库。
-func (s *OrderService) PollOrder(userID uint, orderNum string) (*OrderPollResult, error) {
-	ctx := context.Background()
+func (s *OrderService) PollOrder(ctx context.Context, userID uint, orderNum string) (*OrderPollResult, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
 	cache, err := getPendingOrder(ctx, orderNum)
 	if err == nil && cache != nil {
 		switch cache.Status {
@@ -282,7 +287,7 @@ func (s *OrderService) PollOrder(userID uint, orderNum string) (*OrderPollResult
 			return &OrderPollResult{Status: PendingStatusFailed, OrderNum: orderNum, Message: cache.Message}, nil
 		case PendingStatusReady:
 			if cache.OrderID > 0 {
-				order, getErr := s.GetOrderWithPayment(userID, cache.OrderID)
+				order, getErr := s.GetOrderWithPayment(ctx, userID, cache.OrderID)
 				if getErr == nil {
 					pid := cache.PaymentID
 					if pid == "" && order.Payment != nil {
@@ -294,7 +299,7 @@ func (s *OrderService) PollOrder(userID uint, orderNum string) (*OrderPollResult
 		}
 	}
 
-	order, getErr := s.GetOrderWithPaymentByNum(userID, orderNum)
+	order, getErr := s.GetOrderWithPaymentByNum(ctx, userID, orderNum)
 	if getErr != nil {
 		if errors.Is(getErr, ErrOrderNotFound) {
 			return &OrderPollResult{Status: PendingStatusPending, OrderNum: orderNum}, nil
@@ -311,7 +316,7 @@ func (s *OrderService) PollOrder(userID uint, orderNum string) (*OrderPollResult
 }
 
 // HandlePaymentResult 幂等处理支付回调：乐观锁更新支付单，条件更新订单状态，并在支付成功时刷新缓存库存。
-func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.PaymentStatus, notifyData string) (*OrderWithPayment, error) {
+func (s *OrderService) HandlePaymentResult(ctx context.Context, paymentID string, targetStatus model.PaymentStatus, notifyData string) (*OrderWithPayment, error) {
 	if targetStatus != model.PaymentStatusPaid && targetStatus != model.PaymentStatusFailed && targetStatus != model.PaymentStatusRefunded {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPayStatus, targetStatus)
 	}
@@ -320,11 +325,14 @@ func (s *OrderService) HandlePaymentResult(paymentID string, targetStatus model.
 	if paymentID == "" {
 		return nil, ErrPaymentNotFound
 	}
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
 
 	// 事务防脏写
 	// 事务的四大特性
 	// 原子性、一致性、隔离性、持久性
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		txPaymentRepo := repository.NewPaymentRepo(tx)
 		txOrderRepo := repository.NewOrderRepo(tx)
 		txProductRepo := repository.NewProductRepo(tx)

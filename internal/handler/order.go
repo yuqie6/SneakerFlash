@@ -55,7 +55,7 @@ func NewOrderHandler(orderSvc *service.OrderService) *OrderHandler {
 // @Router /orders [get]
 func (h *OrderHandler) ListOrders(c *gin.Context) {
 	appG := app.Gin{C: c}
-	orderSvc := h.orderSvc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -90,7 +90,7 @@ func (h *OrderHandler) ListOrders(c *gin.Context) {
 		statusPtr = &status
 	}
 
-	orders, total, err := orderSvc.ListOrders(userID, statusPtr, page, size)
+	orders, total, err := h.orderSvc.ListOrders(ctx, userID, statusPtr, page, size)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
@@ -117,7 +117,7 @@ func (h *OrderHandler) ListOrders(c *gin.Context) {
 // @Router /orders/{id} [get]
 func (h *OrderHandler) GetOrder(c *gin.Context) {
 	appG := app.Gin{C: c}
-	orderSvc := h.orderSvc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -136,7 +136,7 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
-	orderWithPayment, err := orderSvc.GetOrderWithPayment(userID, uint(id))
+	orderWithPayment, err := h.orderSvc.GetOrderWithPayment(ctx, userID, uint(id))
 	if err != nil {
 		if errors.Is(err, service.ErrOrderNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
 			appG.Error(http.StatusNotFound, e.INVALID_PARAMS)
@@ -161,7 +161,7 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 // @Router /orders/poll/{order_num} [get]
 func (h *OrderHandler) PollOrder(c *gin.Context) {
 	appG := app.Gin{C: c}
-	orderSvc := h.orderSvc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -180,7 +180,7 @@ func (h *OrderHandler) PollOrder(c *gin.Context) {
 		return
 	}
 
-	result, err := orderSvc.PollOrder(userID, orderNum)
+	result, err := h.orderSvc.PollOrder(ctx, userID, orderNum)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
@@ -211,7 +211,7 @@ func (h *OrderHandler) PollOrder(c *gin.Context) {
 // @Router /orders/{id}/apply-coupon [post]
 func (h *OrderHandler) ApplyCoupon(c *gin.Context) {
 	appG := app.Gin{C: c}
-	orderSvc := h.orderSvc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -237,7 +237,7 @@ func (h *OrderHandler) ApplyCoupon(c *gin.Context) {
 		return
 	}
 
-	result, err := orderSvc.ApplyCoupon(userID, uint(id), req.CouponID)
+	result, err := h.orderSvc.ApplyCoupon(ctx, userID, uint(id), req.CouponID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrOrderNotFound):
@@ -265,7 +265,7 @@ func (h *OrderHandler) ApplyCoupon(c *gin.Context) {
 // @Router /payment/callback [post]
 func (h *OrderHandler) PaymentCallback(c *gin.Context) {
 	appG := app.Gin{C: c}
-	orderSvc := h.orderSvc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 
 	var req PaymentCallbackReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -286,7 +286,7 @@ func (h *OrderHandler) PaymentCallback(c *gin.Context) {
 		return
 	}
 
-	orderWithPayment, err := orderSvc.HandlePaymentResult(req.PaymentID, targetStatus, req.NotifyData)
+	orderWithPayment, err := h.orderSvc.HandlePaymentResult(ctx, req.PaymentID, targetStatus, req.NotifyData)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPaymentNotFound):

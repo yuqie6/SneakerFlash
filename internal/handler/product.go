@@ -72,7 +72,7 @@ func parseStartTime(raw string) (time.Time, error) {
 // @Router /products [post]
 func (h *ProductHandler) Create(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 	uidAny, ok := c.Get("userID")
 	if !ok {
 		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
@@ -101,7 +101,7 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		Image:     req.Image,
 	}
 
-	if err := svc.CreateProduct(p); err != nil {
+	if err := h.svc.CreateProduct(ctx, p); err != nil {
 		switch {
 		case errors.Is(err, service.ErrProductDuplicate):
 			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "商品已存在，请勿重复提交")
@@ -125,7 +125,7 @@ func (h *ProductHandler) Create(c *gin.Context) {
 // @Router /product/{id} [get]
 func (h *ProductHandler) GetProduct(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -133,7 +133,7 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 		return
 	}
 
-	p, err := svc.GetProductByID(uint(id))
+	p, err := h.svc.GetProductByID(ctx, uint(id))
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrProductNotFound), errors.Is(err, gorm.ErrRecordNotFound):
@@ -158,7 +158,7 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 // @Router /products [get]
 func (h *ProductHandler) ListProducts(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
@@ -170,7 +170,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		return
 	}
 
-	list, total, err := svc.ListProducts(page, size)
+	list, total, err := h.svc.ListProducts(ctx, page, size)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
@@ -198,7 +198,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 // @Router /products/{id} [put]
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 	uidAny, ok := c.Get("userID")
 	if !ok {
 		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
@@ -240,7 +240,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		updates["image"] = *req.Image
 	}
 
-	if err := svc.UpdateProduct(userID, uint(id), updates); err != nil {
+	if err := h.svc.UpdateProduct(ctx, userID, uint(id), updates); err != nil {
 		if errors.Is(err, service.ErrProductNotFound) {
 			appG.Error(http.StatusNotFound, e.ERROR_NOT_EXIST_PRODUCT)
 		} else {
@@ -264,7 +264,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 // @Router /products/{id} [delete]
 func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 	uidAny, ok := c.Get("userID")
 	if !ok {
 		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
@@ -278,7 +278,7 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 		return
 	}
 
-	if err := svc.DeleteProduct(userID, uint(id)); err != nil {
+	if err := h.svc.DeleteProduct(ctx, userID, uint(id)); err != nil {
 		if errors.Is(err, service.ErrProductNotFound) {
 			appG.Error(http.StatusNotFound, e.ERROR_NOT_EXIST_PRODUCT)
 		} else {
@@ -302,7 +302,7 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 // @Router /products/mine [get]
 func (h *ProductHandler) ListMyProducts(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 	uidAny, ok := c.Get("userID")
 	if !ok {
 		appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
@@ -321,7 +321,7 @@ func (h *ProductHandler) ListMyProducts(c *gin.Context) {
 		return
 	}
 
-	list, total, err := svc.ListUserProducts(userID, page, size)
+	list, total, err := h.svc.ListUserProducts(ctx, userID, page, size)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return

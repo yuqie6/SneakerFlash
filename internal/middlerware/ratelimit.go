@@ -87,8 +87,9 @@ func InterfaceLimiter(rdb *redis.Client, cfg LimitConfig, msg string) gin.Handle
 		return func(c *gin.Context) { c.Next() }
 	}
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
 		for _, key := range buildKeys(cfg.KeyPrefix, c.FullPath(), c) {
-			if ok := allow(rdb, key, cfg); !ok {
+			if ok := allow(ctx, rdb, key, cfg); !ok {
 				rateLimited(c, msg)
 				return
 			}
@@ -103,13 +104,14 @@ func ParamLimiter(rdb *redis.Client, cfg LimitConfig, param string, msg string) 
 		return func(c *gin.Context) { c.Next() }
 	}
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
 		val := extractParam(c, param)
 		if val == "" {
 			c.Next()
 			return
 		}
 		for _, key := range buildKeys(cfg.KeyPrefix, val, c) {
-			if ok := allow(rdb, key, cfg); !ok {
+			if ok := allow(ctx, rdb, key, cfg); !ok {
 				rateLimited(c, msg)
 				return
 			}
@@ -119,13 +121,16 @@ func ParamLimiter(rdb *redis.Client, cfg LimitConfig, param string, msg string) 
 }
 
 // allow 执行 Lua 令牌桶，失败时放行以避免误杀。
-func allow(rdb *redis.Client, key string, cfg LimitConfig) bool {
+func allow(ctx context.Context, rdb *redis.Client, key string, cfg LimitConfig) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	now := time.Now().Unix()
 	ttl := cfg.TTL
 	if ttl <= 0 {
 		ttl = 120
 	}
-	result, err := rdb.Eval(context.Background(), redisLua, []string{key}, cfg.Rate, cfg.Burst, now, 1, ttl).Int()
+	result, err := rdb.Eval(ctx, redisLua, []string{key}, cfg.Rate, cfg.Burst, now, 1, ttl).Int()
 	if err != nil {
 		// Redis 异常时记录告警，默认放行避免误杀
 		slog.Warn("限流脚本执行失败", slog.Any("err", err), slog.String("key", key))
@@ -138,9 +143,13 @@ func allow(rdb *redis.Client, key string, cfg LimitConfig) bool {
 func BlackListMiddleware(rdb *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		appG := app.Gin{C: c}
+		ctx := c.Request.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		ip := clientIP(c)
 		if ip != "" {
-			in, _ := rdb.SIsMember(context.Background(), "risk:ip:black", ip).Result()
+			in, _ := rdb.SIsMember(ctx, "risk:ip:black", ip).Result()
 			if in {
 				appG.ErrorMsg(http.StatusTooManyRequests, e.RISK_BLACK, "IP 被限制")
 				c.Abort()
@@ -149,7 +158,7 @@ func BlackListMiddleware(rdb *redis.Client) gin.HandlerFunc {
 		}
 		if uidAny, ok := c.Get("userID"); ok {
 			uid := fmt.Sprintf("%v", uidAny)
-			in, _ := rdb.SIsMember(context.Background(), "risk:user:black", uid).Result()
+			in, _ := rdb.SIsMember(ctx, "risk:user:black", uid).Result()
 			if in {
 				appG.ErrorMsg(http.StatusTooManyRequests, e.RISK_BLACK, "账号被限制")
 				c.Abort()
@@ -164,9 +173,13 @@ func BlackListMiddleware(rdb *redis.Client) gin.HandlerFunc {
 func GrayListMiddleware(rdb *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		appG := app.Gin{C: c}
+		ctx := c.Request.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		ip := clientIP(c)
 		if ip != "" {
-			in, _ := rdb.SIsMember(context.Background(), "risk:ip:gray", ip).Result()
+			in, _ := rdb.SIsMember(ctx, "risk:ip:gray", ip).Result()
 			if in {
 				appG.ErrorMsg(http.StatusTooManyRequests, e.RISK_LIMITED, "灰名单限制")
 				c.Abort()
@@ -175,7 +188,7 @@ func GrayListMiddleware(rdb *redis.Client) gin.HandlerFunc {
 		}
 		if uidAny, ok := c.Get("userID"); ok {
 			uid := fmt.Sprintf("%v", uidAny)
-			in, _ := rdb.SIsMember(context.Background(), "risk:user:gray", uid).Result()
+			in, _ := rdb.SIsMember(ctx, "risk:user:gray", uid).Result()
 			if in {
 				appG.ErrorMsg(http.StatusTooManyRequests, e.RISK_LIMITED, "灰名单限制")
 				c.Abort()

@@ -34,47 +34,50 @@ func NewProductService(repo *repository.ProductRepo) *ProductService {
 	}
 }
 
-// WithContext 让仓储与 GORM 日志继承请求上下文。
-func (s *ProductService) WithContext(ctx context.Context) *ProductService {
-	if ctx == nil {
-		return s
-	}
-	return &ProductService{
-		repo: s.repo.WithContext(ctx),
-		sf:   s.sf,
-	}
-}
-
 // CreateProduct 创建商品；若 Redis 预热失败会回滚数据库记录以保持库存一致性。
-func (s *ProductService) CreateProduct(product *model.Product) error {
-	if err := s.repo.Create(product); err != nil {
+func (s *ProductService) CreateProduct(ctx context.Context, product *model.Product) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
+
+	repo := s.repo.WithContext(ctx)
+	if err := repo.Create(product); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || isMySQLDuplicate(err) {
 			return ErrProductDuplicate
 		}
 		return err
 	}
 
-	if err := s.SyncStockToRedis(product.ID, product.Stock); err != nil {
+	if err := s.SyncStockToRedis(ctx, product.ID, product.Stock); err != nil {
 		// 预热失败尝试回滚数据库记录，保持一致性
-		_ = s.repo.Delete(product.ID)
+		_ = repo.Delete(product.ID)
 		return err
 	}
 	return nil
 }
 
 // SyncStockToRedis 将库存同步到 Redis，作为秒杀读写的唯一实时源。
-func (s *ProductService) SyncStockToRedis(id uint, stock int) error {
-	return setStockCache(id, stock)
+func (s *ProductService) SyncStockToRedis(ctx context.Context, id uint, stock int) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
+	return setStockCache(ctx, id, stock)
 }
 
 // ListProducts 分页查询商品列表。
-func (s *ProductService) ListProducts(page, pageSize int) ([]model.Product, int64, error) {
-	return s.repo.List(page, pageSize)
+func (s *ProductService) ListProducts(ctx context.Context, page, pageSize int) ([]model.Product, int64, error) {
+	if ctx == nil {
+		return nil, 0, fmt.Errorf("context is nil")
+	}
+	return s.repo.WithContext(ctx).List(page, pageSize)
 }
 
 // GetProductByID 优先读缓存，singleflight 防击穿，null 哨兵防穿透，随机 TTL 防雪崩；库存以 Redis 为准。
-func (s *ProductService) GetProductByID(id uint) (*model.Product, error) {
-	ctx := context.Background()
+func (s *ProductService) GetProductByID(ctx context.Context, id uint) (*model.Product, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
+	repo := s.repo.WithContext(ctx)
 	cacheKey := fmt.Sprintf("product:info:%d", id)
 
 	// 查 redis
@@ -106,7 +109,7 @@ func (s *ProductService) GetProductByID(id uint) (*model.Product, error) {
 		}
 
 		// 查数据库
-		p, err := s.repo.GetByID(id)
+		p, err := repo.GetByID(id)
 		if err != nil {
 			// 查不到, 设置 null
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -145,11 +148,15 @@ func (s *ProductService) GetProductByID(id uint) (*model.Product, error) {
 }
 
 // UpdateProduct 仅允许创建者更新，未命中则视为不存在。
-func (s *ProductService) UpdateProduct(userID, id uint, data map[string]any) error {
+func (s *ProductService) UpdateProduct(ctx context.Context, userID, id uint, data map[string]any) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	if len(data) == 0 {
 		return nil
 	}
-	rows, err := s.repo.UpdateByUser(id, userID, data)
+	repo := s.repo.WithContext(ctx)
+	rows, err := repo.UpdateByUser(id, userID, data)
 	if err != nil {
 		return err
 	}
@@ -160,15 +167,22 @@ func (s *ProductService) UpdateProduct(userID, id uint, data map[string]any) err
 }
 
 // DeleteProduct 删除指定用户的商品。
-func (s *ProductService) DeleteProduct(userID, id uint) error {
-	p, err := s.repo.GetByIDAndUser(id, userID)
+func (s *ProductService) DeleteProduct(ctx context.Context, userID, id uint) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
+	repo := s.repo.WithContext(ctx)
+	p, err := repo.GetByIDAndUser(id, userID)
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(p.ID)
+	return repo.Delete(p.ID)
 }
 
 // ListUserProducts 查询用户发布的商品列表。
-func (s *ProductService) ListUserProducts(userID uint, page, size int) ([]model.Product, int64, error) {
-	return s.repo.ListByUserID(userID, page, size)
+func (s *ProductService) ListUserProducts(ctx context.Context, userID uint, page, size int) ([]model.Product, int64, error) {
+	if ctx == nil {
+		return nil, 0, fmt.Errorf("context is nil")
+	}
+	return s.repo.WithContext(ctx).ListByUserID(userID, page, size)
 }
