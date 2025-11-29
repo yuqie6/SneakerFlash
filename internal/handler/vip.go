@@ -27,7 +27,7 @@ func NewVIPHandler(svc *service.VIPService) *VIPHandler {
 // @Router /vip/profile [get]
 func (h *VIPHandler) GetProfile(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -40,7 +40,7 @@ func (h *VIPHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
-	profile, err := svc.Profile(userID)
+	profile, err := h.svc.Profile(ctx, userID)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
@@ -65,7 +65,7 @@ type PurchaseVIPReq struct {
 // @Router /vip/purchase [post]
 func (h *VIPHandler) Purchase(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -84,7 +84,7 @@ func (h *VIPHandler) Purchase(c *gin.Context) {
 		return
 	}
 
-	profile, err := svc.PurchasePaidVIP(userID, req.PlanID)
+	profile, err := h.svc.PurchasePaidVIP(ctx, userID, req.PlanID)
 	if err != nil {
 		appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, err.Error())
 		return

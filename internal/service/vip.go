@@ -45,25 +45,19 @@ func NewVIPService(db *gorm.DB, userRepo *repository.UserRepo) *VIPService {
 	}
 }
 
-func (s *VIPService) WithContext(ctx context.Context) *VIPService {
+func (s *VIPService) Profile(ctx context.Context, userID uint) (*VIPProfile, error) {
 	if ctx == nil {
-		return s
+		return nil, fmt.Errorf("context is nil")
 	}
-	ctxDB := s.db.WithContext(ctx)
-	return &VIPService{
-		db:          ctxDB,
-		userRepo:    s.userRepo.WithContext(ctx),
-		paidVIPRepo: s.paidVIPRepo.WithContext(ctx),
-	}
-}
+	userRepo := s.userRepo.WithContext(ctx)
+	paidRepo := s.paidVIPRepo.WithContext(ctx)
 
-func (s *VIPService) Profile(userID uint) (*VIPProfile, error) {
-	user, err := s.userRepo.GetByID(userID)
+	user, err := userRepo.GetByID(userID)
 	if err != nil {
 		return nil, err
 	}
 	var paid *model.PaidVIP
-	if pv, err := s.paidVIPRepo.GetByUser(userID); err == nil {
+	if pv, err := paidRepo.GetByUser(userID); err == nil {
 		paid = pv
 	}
 
@@ -80,17 +74,21 @@ func (s *VIPService) Profile(userID uint) (*VIPProfile, error) {
 }
 
 // PurchasePaidVIP 激活付费 VIP（模拟购买成功），当前直接落库，可结合支付单扩展。
-func (s *VIPService) PurchasePaidVIP(userID uint, planID int) (*VIPProfile, error) {
+func (s *VIPService) PurchasePaidVIP(ctx context.Context, userID uint, planID int) (*VIPProfile, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
+	paidRepo := s.paidVIPRepo.WithContext(ctx)
 	plan, ok := paidPlans[planID]
 	if !ok {
 		return nil, fmt.Errorf("未知付费VIP套餐")
 	}
 	start := time.Now()
 	end := start.Add(time.Duration(plan.DurationDays) * 24 * time.Hour)
-	if err := s.paidVIPRepo.Upsert(userID, plan.Level, start, end); err != nil {
+	if err := paidRepo.Upsert(userID, plan.Level, start, end); err != nil {
 		return nil, err
 	}
-	return s.Profile(userID)
+	return s.Profile(ctx, userID)
 }
 
 func max(a, b int) int {

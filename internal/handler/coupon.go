@@ -28,8 +28,7 @@ func NewCouponHandler(svc *service.CouponService, vipSvc *service.VIPService) *C
 // @Router /coupons/mine [get]
 func (h *CouponHandler) ListMyCoupons(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
-	vipSvc := h.vipSvc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -43,12 +42,12 @@ func (h *CouponHandler) ListMyCoupons(c *gin.Context) {
 	}
 
 	// 登录时触发当月 VIP 配额发券
-	if profile, err := vipSvc.Profile(userID); err == nil {
-		_ = svc.IssueVIPMonthly(userID, profile.EffectiveLevel)
+	if profile, err := h.vipSvc.Profile(ctx, userID); err == nil {
+		_ = h.svc.IssueVIPMonthly(ctx, userID, profile.EffectiveLevel)
 	}
 
 	status := c.Query("status")
-	list, err := svc.ListUserCoupons(userID, status)
+	list, err := h.svc.ListUserCoupons(ctx, userID, status)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
@@ -71,7 +70,7 @@ type PurchaseCouponReq struct {
 // @Router /coupons/purchase [post]
 func (h *CouponHandler) PurchaseCoupon(c *gin.Context) {
 	appG := app.Gin{C: c}
-	svc := h.svc.WithContext(c.Request.Context())
+	ctx := c.Request.Context()
 
 	userIDAny, exists := c.Get("userID")
 	if !exists {
@@ -90,7 +89,7 @@ func (h *CouponHandler) PurchaseCoupon(c *gin.Context) {
 		return
 	}
 
-	uc, err := svc.PurchaseCoupon(userID, req.CouponID)
+	uc, err := h.svc.PurchaseCoupon(ctx, userID, req.CouponID)
 	if err != nil {
 		appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, err.Error())
 		return

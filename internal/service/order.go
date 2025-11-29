@@ -122,7 +122,7 @@ func (s *OrderService) ApplyCoupon(ctx context.Context, userID, orderID uint, co
 		var appliedUC *model.UserCoupon
 		var appliedTpl *model.Coupon
 		if couponID != nil {
-			uc, tpl, discounted, cErr := txCouponSvc.ApplyCoupon(userID, *couponID, baseAmount)
+			uc, tpl, discounted, cErr := txCouponSvc.ApplyCoupon(ctx, userID, *couponID, baseAmount)
 			if cErr != nil {
 				return cErr
 			}
@@ -199,7 +199,8 @@ func (s *OrderService) GetOrderWithPayment(ctx context.Context, userID, orderID 
 	orderRepo := s.orderRepo.WithContext(ctx)
 	paymentRepo := s.paymentRepo.WithContext(ctx)
 	productRepo := s.productRepo.WithContext(ctx)
-	couponSvc := s.couponSvc.WithContext(ctx)
+	userCouponRepo := s.couponSvc.userCouponRepo.WithContext(ctx)
+	couponRepo := s.couponSvc.couponRepo.WithContext(ctx)
 
 	order, err := orderRepo.GetByID(orderID)
 	if err != nil {
@@ -241,8 +242,8 @@ func (s *OrderService) GetOrderWithPayment(ctx context.Context, userID, orderID 
 	}
 
 	var myCoupon *MyCoupon
-	if uc, ucErr := couponSvc.userCouponRepo.GetByOrderID(order.ID); ucErr == nil && uc != nil {
-		if tpl, tplErr := couponSvc.couponRepo.GetByID(uc.CouponID); tplErr == nil {
+	if uc, ucErr := userCouponRepo.GetByOrderID(order.ID); ucErr == nil && uc != nil {
+		if tpl, tplErr := couponRepo.GetByID(uc.CouponID); tplErr == nil {
 			myCoupon = toMyCoupon(uc, tpl)
 		}
 	}

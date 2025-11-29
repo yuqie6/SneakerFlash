@@ -30,16 +30,11 @@ func NewUserService(repo *repository.UserRepo) *UserService {
 	}
 }
 
-// WithContext 绑定请求上下文，让用户相关数据库操作日志带上 request_id。
-func (s *UserService) WithContext(ctx context.Context) *UserService {
-	if ctx == nil {
-		return s
-	}
-	return &UserService{repo: s.repo.WithContext(ctx)}
-}
-
 // Register 注册用户，直接插入并依赖唯一键防重，密码使用哈希存储。
-func (s *UserService) Register(username, password string) error {
+func (s *UserService) Register(ctx context.Context, username, password string) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
 	// 加密用户密码
 	hashPwd, err := utils.HashPassword(password)
 	if err != nil {
@@ -52,7 +47,7 @@ func (s *UserService) Register(username, password string) error {
 		Password: hashPwd,
 		Balance:  0,
 	}
-	if err := s.repo.Create(user); err != nil {
+	if err := s.repo.WithContext(ctx).Create(user); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || isMySQLDuplicate(err) {
 			return ErrUserExited
 		}
@@ -62,9 +57,12 @@ func (s *UserService) Register(username, password string) error {
 }
 
 // Login 校验密码后签发 access/refresh token。
-func (s *UserService) Login(username, password string) (string, string, error) {
+func (s *UserService) Login(ctx context.Context, username, password string) (string, string, error) {
+	if ctx == nil {
+		return "", "", fmt.Errorf("context is nil")
+	}
 	// 查找用户
-	user, err := s.repo.GetByUsername(username)
+	user, err := s.repo.WithContext(ctx).GetByUsername(username)
 	if err != nil {
 		return "", "", ErrUserNotFound
 	}
@@ -84,12 +82,18 @@ func (s *UserService) Login(username, password string) (string, string, error) {
 }
 
 // GetProfile 查询用户信息。
-func (s *UserService) GetProfile(userID uint) (*model.User, error) {
-	return s.repo.GetByID(userID)
+func (s *UserService) GetProfile(ctx context.Context, userID uint) (*model.User, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
+	return s.repo.WithContext(ctx).GetByID(userID)
 }
 
 // Refresh 使用 refresh token 续签新的 access token。
-func (s *UserService) Refresh(refreshToken string) (string, error) {
+func (s *UserService) Refresh(ctx context.Context, refreshToken string) (string, error) {
+	if ctx == nil {
+		return "", fmt.Errorf("context is nil")
+	}
 	claims, err := utils.ParshToken(refreshToken)
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
@@ -109,8 +113,12 @@ func (s *UserService) Refresh(refreshToken string) (string, error) {
 }
 
 // UpdateProfile 更新用户名或头像；用户名变更会先查重。
-func (s *UserService) UpdateProfile(userID uint, username, avatar *string) (*model.User, error) {
-	user, err := s.repo.GetByID(userID)
+func (s *UserService) UpdateProfile(ctx context.Context, userID uint, username, avatar *string) (*model.User, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
+	repo := s.repo.WithContext(ctx)
+	user, err := repo.GetByID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +126,7 @@ func (s *UserService) UpdateProfile(userID uint, username, avatar *string) (*mod
 	updates := map[string]any{}
 
 	if username != nil && *username != user.Username {
-		_, err := s.repo.GetByUsername(*username)
+		_, err := repo.GetByUsername(*username)
 		switch {
 		case err == nil:
 			return nil, ErrUserExited
@@ -139,7 +147,7 @@ func (s *UserService) UpdateProfile(userID uint, username, avatar *string) (*mod
 		return user, nil
 	}
 
-	if err := s.repo.UpdateProfile(userID, updates); err != nil {
+	if err := repo.UpdateProfile(userID, updates); err != nil {
 		return nil, err
 	}
 
