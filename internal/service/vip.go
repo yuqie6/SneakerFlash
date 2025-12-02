@@ -49,15 +49,13 @@ func (s *VIPService) Profile(ctx context.Context, userID uint) (*VIPProfile, err
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	userRepo := s.userRepo.WithContext(ctx)
-	paidRepo := s.paidVIPRepo.WithContext(ctx)
 
-	user, err := userRepo.GetByID(userID)
+	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	var paid *model.PaidVIP
-	if pv, err := paidRepo.GetByUser(userID); err == nil {
+	if pv, err := s.paidVIPRepo.GetByUser(ctx, userID); err == nil {
 		paid = pv
 	}
 
@@ -78,14 +76,13 @@ func (s *VIPService) PurchasePaidVIP(ctx context.Context, userID uint, planID in
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	paidRepo := s.paidVIPRepo.WithContext(ctx)
 	plan, ok := paidPlans[planID]
 	if !ok {
 		return nil, fmt.Errorf("未知付费VIP套餐")
 	}
 	start := time.Now()
 	end := start.Add(time.Duration(plan.DurationDays) * 24 * time.Hour)
-	if err := paidRepo.Upsert(userID, plan.Level, start, end); err != nil {
+	if err := s.paidVIPRepo.Upsert(ctx, userID, plan.Level, start, end); err != nil {
 		return nil, err
 	}
 	return s.Profile(ctx, userID)

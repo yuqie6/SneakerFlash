@@ -74,7 +74,7 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 	}
 
 	// 0. 校验商品存在与开始时间
-	product, err := s.productRepo.WithContext(ctx).GetByID(productID)
+	product, err := s.productRepo.GetByID(ctx, productID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrProductNotFound

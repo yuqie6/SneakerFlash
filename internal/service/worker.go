@@ -62,8 +62,8 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 
 		// 幂等：优先按订单号，再按 user+product
 		if msg.OrderNum != "" {
-			if existing, err := txOrderRepo.GetByOrderNum(msg.OrderNum); err == nil && existing != nil {
-				payment, _ := txPaymentRepo.GetByOrderID(existing.ID)
+			if existing, err := txOrderRepo.GetByOrderNum(logCtx, msg.OrderNum); err == nil && existing != nil {
+				payment, _ := txPaymentRepo.GetByOrderID(logCtx, existing.ID)
 				pid := msg.PaymentID
 				if payment != nil && payment.PaymentID != "" {
 					pid = payment.PaymentID
@@ -75,8 +75,8 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 			}
 		}
 
-		if existing, err := txOrderRepo.GetByUserAndProduct(msg.UserID, msg.ProductID); err == nil && existing != nil {
-			payment, _ := txPaymentRepo.GetByOrderID(existing.ID)
+		if existing, err := txOrderRepo.GetByUserAndProduct(logCtx, msg.UserID, msg.ProductID); err == nil && existing != nil {
+			payment, _ := txPaymentRepo.GetByOrderID(logCtx, existing.ID)
 			pid := msg.PaymentID
 			if payment != nil && payment.PaymentID != "" {
 				pid = payment.PaymentID
@@ -88,7 +88,7 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		}
 
 		// 扣减数据库库存
-		rowsAffected, err := txProductRepo.ReduceStockDB(msg.ProductID)
+		rowsAffected, err := txProductRepo.ReduceStockDB(logCtx, msg.ProductID)
 		if err != nil {
 			return err
 		}
@@ -100,7 +100,7 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 
 		amountCents := msg.PriceCents
 		if amountCents <= 0 {
-			product, pErr := txProductRepo.GetByID(msg.ProductID)
+			product, pErr := txProductRepo.GetByID(logCtx, msg.ProductID)
 			if pErr != nil {
 				return pErr
 			}
@@ -117,7 +117,7 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 			Status:    model.OrderStatusUnpaid,
 		}
 
-		if err := txOrderRepo.Create(order); err != nil {
+		if err := txOrderRepo.Create(logCtx, order); err != nil {
 			slog.ErrorContext(logCtx, "创建订单失败", slog.Any("err", err))
 			return err
 		}
@@ -136,11 +136,11 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 			AmountCents: amountCents,
 			Status:      model.PaymentStatusPending,
 		}
-		if _, err := txPaymentRepo.CreateIfAbsent(payment); err != nil {
+		if _, err := txPaymentRepo.CreateIfAbsent(logCtx, payment); err != nil {
 			return err
 		}
 
-		if updatedProduct, err := txProductRepo.GetByID(msg.ProductID); err == nil {
+		if updatedProduct, err := txProductRepo.GetByID(logCtx, msg.ProductID); err == nil {
 			latestStock = updatedProduct.Stock
 		}
 

@@ -91,7 +91,7 @@ func (s *OrderService) ApplyCoupon(ctx context.Context, userID, orderID uint, co
 		txCouponSvc := NewCouponService(tx)
 		txUserCouponRepo := repository.NewUserCouponRepo(tx)
 
-		order, err := txOrderRepo.GetByIDForUpdate(orderID)
+		order, err := txOrderRepo.GetByIDForUpdate(ctx, orderID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrOrderNotFound
@@ -105,7 +105,7 @@ func (s *OrderService) ApplyCoupon(ctx context.Context, userID, orderID uint, co
 			return ErrOrderNotPayable
 		}
 
-		product, err := txProductRepo.GetByID(order.ProductID)
+		product, err := txProductRepo.GetByID(ctx, order.ProductID)
 		if err != nil {
 			return err
 		}
@@ -114,8 +114,8 @@ func (s *OrderService) ApplyCoupon(ctx context.Context, userID, orderID uint, co
 			return fmt.Errorf("invalid product price: %v", product.Price)
 		}
 
-		if _, existingErr := txUserCouponRepo.GetByOrderID(order.ID); existingErr == nil {
-			_ = txUserCouponRepo.ReleaseByOrder(order.ID)
+		if _, existingErr := txUserCouponRepo.GetByOrderID(ctx, order.ID); existingErr == nil {
+			_ = txUserCouponRepo.ReleaseByOrder(ctx, order.ID)
 		}
 
 		finalAmount := baseAmount
@@ -131,7 +131,7 @@ func (s *OrderService) ApplyCoupon(ctx context.Context, userID, orderID uint, co
 			appliedTpl = tpl
 		}
 
-		payment, err := txPaymentRepo.GetByOrderID(order.ID)
+		payment, err := txPaymentRepo.GetByOrderID(ctx, order.ID)
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
@@ -146,25 +146,25 @@ func (s *OrderService) ApplyCoupon(ctx context.Context, userID, orderID uint, co
 				AmountCents: finalAmount,
 				Status:      model.PaymentStatusPending,
 			}
-			if _, err := txPaymentRepo.CreateIfAbsent(payment); err != nil {
+			if _, err := txPaymentRepo.CreateIfAbsent(ctx, payment); err != nil {
 				return err
 			}
 		} else {
-			rows, err := txPaymentRepo.UpdateAmountIfPending(order.ID, finalAmount)
+			rows, err := txPaymentRepo.UpdateAmountIfPending(ctx, order.ID, finalAmount)
 			if err != nil {
 				return err
 			}
 			if rows == 0 && payment.Status != model.PaymentStatusPending {
 				return ErrOrderNotPayable
 			}
-			payment, err = txPaymentRepo.GetByOrderID(order.ID)
+			payment, err = txPaymentRepo.GetByOrderID(ctx, order.ID)
 			if err != nil {
 				return err
 			}
 		}
 
 		if appliedUC != nil {
-			if err := txUserCouponRepo.MarkUsed(appliedUC.ID, order.ID); err != nil {
+			if err := txUserCouponRepo.MarkUsed(ctx, appliedUC.ID, order.ID); err != nil {
 				return err
 			}
 		}
@@ -188,7 +188,7 @@ func (s *OrderService) ListOrders(ctx context.Context, userID uint, status *mode
 	if ctx == nil {
 		return nil, 0, fmt.Errorf("context is nil")
 	}
-	return s.orderRepo.WithContext(ctx).ListByUserID(userID, status, page, pageSize)
+	return s.orderRepo.ListByUserID(ctx, userID, status, page, pageSize)
 }
 
 // GetOrderWithPayment 获取订单详情（含支付单），同时校验用户归属并补偿缺失的支付单。
@@ -196,13 +196,8 @@ func (s *OrderService) GetOrderWithPayment(ctx context.Context, userID, orderID 
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	orderRepo := s.orderRepo.WithContext(ctx)
-	paymentRepo := s.paymentRepo.WithContext(ctx)
-	productRepo := s.productRepo.WithContext(ctx)
-	userCouponRepo := s.couponSvc.userCouponRepo.WithContext(ctx)
-	couponRepo := s.couponSvc.couponRepo.WithContext(ctx)
 
-	order, err := orderRepo.GetByID(orderID)
+	order, err := s.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOrderNotFound
@@ -213,14 +208,14 @@ func (s *OrderService) GetOrderWithPayment(ctx context.Context, userID, orderID 
 		return nil, ErrOrderNotFound
 	}
 
-	payment, err := paymentRepo.GetByOrderID(orderID)
+	payment, err := s.paymentRepo.GetByOrderID(ctx, orderID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
 	if payment == nil && errors.Is(err, gorm.ErrRecordNotFound) {
 		// 补偿创建支付单，避免页面缺少 payment_id
-		product, pErr := productRepo.GetByID(order.ProductID)
+		product, pErr := s.productRepo.GetByID(ctx, order.ProductID)
 		if pErr != nil {
 			return nil, pErr
 		}
@@ -235,15 +230,15 @@ func (s *OrderService) GetOrderWithPayment(ctx context.Context, userID, orderID 
 			AmountCents: amountCents,
 			Status:      model.PaymentStatusPending,
 		}
-		if _, cErr := paymentRepo.CreateIfAbsent(newPayment); cErr != nil {
+		if _, cErr := s.paymentRepo.CreateIfAbsent(ctx, newPayment); cErr != nil {
 			return nil, cErr
 		}
 		payment = newPayment
 	}
 
 	var myCoupon *MyCoupon
-	if uc, ucErr := userCouponRepo.GetByOrderID(order.ID); ucErr == nil && uc != nil {
-		if tpl, tplErr := couponRepo.GetByID(uc.CouponID); tplErr == nil {
+	if uc, ucErr := s.couponSvc.userCouponRepo.GetByOrderID(ctx, order.ID); ucErr == nil && uc != nil {
+		if tpl, tplErr := s.couponSvc.couponRepo.GetByID(ctx, uc.CouponID); tplErr == nil {
 			myCoupon = toMyCoupon(uc, tpl)
 		}
 	}
@@ -261,7 +256,7 @@ func (s *OrderService) GetOrderWithPaymentByNum(ctx context.Context, userID uint
 		return nil, fmt.Errorf("context is nil")
 	}
 
-	order, err := s.orderRepo.WithContext(ctx).GetByOrderNum(orderNum)
+	order, err := s.orderRepo.GetByOrderNum(ctx, orderNum)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOrderNotFound
@@ -339,7 +334,7 @@ func (s *OrderService) HandlePaymentResult(ctx context.Context, paymentID string
 		txProductRepo := repository.NewProductRepo(tx)
 		txUserCouponRepo := repository.NewUserCouponRepo(tx)
 
-		payment, err := txPaymentRepo.GetByPaymentID(paymentID)
+		payment, err := txPaymentRepo.GetByPaymentID(ctx, paymentID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrPaymentNotFound
@@ -348,17 +343,17 @@ func (s *OrderService) HandlePaymentResult(ctx context.Context, paymentID string
 		}
 
 		// 乐观锁更新支付状态, 防守护并发竟态与重复回调
-		rows, err := txPaymentRepo.UpdateStatusByPaymentIDIfMatch(paymentID, model.PaymentStatusPending, targetStatus, notifyData)
+		rows, err := txPaymentRepo.UpdateStatusByPaymentIDIfMatch(ctx, paymentID, model.PaymentStatusPending, targetStatus, notifyData)
 		if err != nil {
 			return err
 		}
 		if rows == 0 {
 			// 幂等命中或已处理，返回当前状态
-			updated, getErr := txPaymentRepo.GetByPaymentID(paymentID)
+			updated, getErr := txPaymentRepo.GetByPaymentID(ctx, paymentID)
 			if getErr != nil {
 				return getErr
 			}
-			order, getErr := txOrderRepo.GetByID(payment.OrderID)
+			order, getErr := txOrderRepo.GetByID(ctx, payment.OrderID)
 			if getErr != nil {
 				return getErr
 			}
@@ -371,37 +366,37 @@ func (s *OrderService) HandlePaymentResult(ctx context.Context, paymentID string
 		if targetStatus == model.PaymentStatusPaid {
 			orderStatus = model.OrderStatusPaid
 		}
-		if _, err := txOrderRepo.UpdateStatusIfMatch(payment.OrderID, model.OrderStatusUnpaid, orderStatus); err != nil {
+		if _, err := txOrderRepo.UpdateStatusIfMatch(ctx, payment.OrderID, model.OrderStatusUnpaid, orderStatus); err != nil {
 			return err
 		}
-		order, err := txOrderRepo.GetByID(payment.OrderID)
+		order, err := txOrderRepo.GetByID(ctx, payment.OrderID)
 		if err != nil {
 			return err
 		}
-		updatedPayment, err := txPaymentRepo.GetByPaymentID(paymentID)
+		updatedPayment, err := txPaymentRepo.GetByPaymentID(ctx, paymentID)
 		if err != nil {
 			return err
 		}
 		if targetStatus == model.PaymentStatusPaid {
-			if product, pErr := txProductRepo.GetByID(order.ProductID); pErr == nil {
+			if product, pErr := txProductRepo.GetByID(ctx, order.ProductID); pErr == nil {
 				// 异步刷新缓存库存
 				refreshStockCacheAsync(product.ID, product.Stock)
 				go invalidateProductInfoCache(product.ID)
 			}
 			// 成长值累积：按支付金额计算成长等级
 			txUserRepo := repository.NewUserRepo(tx)
-			user, uErr := txUserRepo.GetByIDForUpdate(order.UserID)
+			user, uErr := txUserRepo.GetByIDForUpdate(ctx, order.UserID)
 			if uErr != nil {
 				return uErr
 			}
 			newTotal := user.TotalSpentCents + payment.AmountCents
 			newLevel := vip.CalcGrowthLevel(newTotal)
-			if uErr := txUserRepo.UpdateGrowth(order.UserID, newTotal, newLevel); uErr != nil {
+			if uErr := txUserRepo.UpdateGrowth(ctx, order.UserID, newTotal, newLevel); uErr != nil {
 				return uErr
 			}
 		} else {
 			// 支付失败/退款则释放已占用的优惠券，避免用户券被锁死
-			if releaseErr := txUserCouponRepo.ReleaseByOrder(order.ID); releaseErr != nil {
+			if releaseErr := txUserCouponRepo.ReleaseByOrder(ctx, order.ID); releaseErr != nil {
 				return releaseErr
 			}
 		}

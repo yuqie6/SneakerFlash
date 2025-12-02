@@ -68,9 +68,8 @@ func (s *CouponService) ApplyCoupon(ctx context.Context, userID uint, couponID u
 		return nil, nil, 0, fmt.Errorf("context is nil")
 	}
 	now := time.Now()
-	userCouponRepo := s.userCouponRepo.WithContext(ctx)
 	// 查询并锁定用户券 + 读取券模板
-	uc, c, err := userCouponRepo.GetUsableForUpdate(userID, couponID, now)
+	uc, c, err := s.userCouponRepo.GetUsableForUpdate(ctx, userID, couponID, now)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -99,14 +98,14 @@ func (s *CouponService) MarkUsed(ctx context.Context, userCouponID uint, orderID
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
-	return s.userCouponRepo.WithContext(ctx).MarkUsed(userCouponID, orderID)
+	return s.userCouponRepo.MarkUsed(ctx, userCouponID, orderID)
 }
 
 func (s *CouponService) ReleaseByOrder(ctx context.Context, orderID uint) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
-	return s.userCouponRepo.WithContext(ctx).ReleaseByOrder(orderID)
+	return s.userCouponRepo.ReleaseByOrder(ctx, orderID)
 }
 
 func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status string) ([]MyCoupon, error) {
@@ -115,7 +114,7 @@ func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status
 	}
 	now := time.Now()
 	var ucs []model.UserCoupon
-	q := s.userCouponRepo.WithContext(ctx).DB().Where("user_id = ?", userID)
+	q := s.userCouponRepo.DB().WithContext(ctx).Where("user_id = ?", userID)
 
 	// 根据 status 参数构建查询条件，考虑过期时间
 	switch status {
@@ -142,7 +141,7 @@ func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status
 		ids = append(ids, uc.CouponID)
 	}
 	var cs []model.Coupon
-	if err := s.couponRepo.WithContext(ctx).DB().Where("id IN ?", ids).Find(&cs).Error; err != nil {
+	if err := s.couponRepo.DB().WithContext(ctx).Where("id IN ?", ids).Find(&cs).Error; err != nil {
 		return nil, err
 	}
 	cmap := make(map[uint]model.Coupon, len(cs))
@@ -180,10 +179,8 @@ func (s *CouponService) PurchaseCoupon(ctx context.Context, userID, couponID uin
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	couponRepo := s.couponRepo.WithContext(ctx)
-	userCouponRepo := s.userCouponRepo.WithContext(ctx)
 
-	c, err := couponRepo.GetByID(couponID)
+	c, err := s.couponRepo.GetByID(ctx, couponID)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +197,7 @@ func (s *CouponService) PurchaseCoupon(ctx context.Context, userID, couponID uin
 		ValidTo:      c.ValidTo,
 		IssuedAt:     now,
 	}
-	if err := userCouponRepo.DB().Create(&uc).Error; err != nil {
+	if err := s.userCouponRepo.DB().WithContext(ctx).Create(&uc).Error; err != nil {
 		return nil, err
 	}
 	return &MyCoupon{
@@ -224,7 +221,6 @@ func (s *CouponService) IssueVIPMonthly(ctx context.Context, userID uint, level 
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
-	userCouponRepo := s.userCouponRepo.WithContext(ctx)
 
 	if level < 1 {
 		level = 1
@@ -237,7 +233,7 @@ func (s *CouponService) IssueVIPMonthly(ctx context.Context, userID uint, level 
 		return nil
 	}
 	start, end := monthPeriod(time.Now())
-	existing, err := userCouponRepo.CountByPeriod(userID, "vip_month", start, end)
+	existing, err := s.userCouponRepo.CountByPeriod(ctx, userID, "vip_month", start, end)
 	if err != nil {
 		return err
 	}
@@ -266,13 +262,12 @@ func (s *CouponService) IssueVIPMonthly(ctx context.Context, userID uint, level 
 			IssuedAt:     now,
 		})
 	}
-	return userCouponRepo.DB().Create(&ucs).Error
+	return s.userCouponRepo.DB().WithContext(ctx).Create(&ucs).Error
 }
 
 func (s *CouponService) ensureTemplate(ctx context.Context, tpl vipCouponTemplate) (*model.Coupon, error) {
-	couponRepo := s.couponRepo.WithContext(ctx)
 	var c model.Coupon
-	err := couponRepo.DB().
+	err := s.couponRepo.DB().WithContext(ctx).
 		Where("title = ?", tpl.Title).
 		First(&c).Error
 	if err == nil {
@@ -292,7 +287,7 @@ func (s *CouponService) ensureTemplate(ctx context.Context, tpl vipCouponTemplat
 		ValidTo:       time.Now().AddDate(1, 0, 0),
 		Status:        "active",
 	}
-	if err := couponRepo.DB().Create(&c).Error; err != nil {
+	if err := s.couponRepo.DB().WithContext(ctx).Create(&c).Error; err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -310,5 +305,5 @@ func (s *CouponService) MarkExpiredCoupons(ctx context.Context) (int64, error) {
 	if ctx == nil {
 		return 0, fmt.Errorf("context is nil")
 	}
-	return s.userCouponRepo.WithContext(ctx).MarkExpiredBatch(time.Now())
+	return s.userCouponRepo.MarkExpiredBatch(ctx, time.Now())
 }

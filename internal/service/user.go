@@ -47,7 +47,7 @@ func (s *UserService) Register(ctx context.Context, username, password string) e
 		Password: hashPwd,
 		Balance:  0,
 	}
-	if err := s.repo.WithContext(ctx).Create(user); err != nil {
+	if err := s.repo.Create(ctx, user); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || isMySQLDuplicate(err) {
 			return ErrUserExited
 		}
@@ -62,7 +62,7 @@ func (s *UserService) Login(ctx context.Context, username, password string) (str
 		return "", "", fmt.Errorf("context is nil")
 	}
 	// 查找用户
-	user, err := s.repo.WithContext(ctx).GetByUsername(username)
+	user, err := s.repo.GetByUsername(ctx, username)
 	if err != nil {
 		return "", "", ErrUserNotFound
 	}
@@ -86,7 +86,7 @@ func (s *UserService) GetProfile(ctx context.Context, userID uint) (*model.User,
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	return s.repo.WithContext(ctx).GetByID(userID)
+	return s.repo.GetByID(ctx, userID)
 }
 
 // Refresh 使用 refresh token 续签新的 access token。
@@ -117,8 +117,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uint, username, 
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	repo := s.repo.WithContext(ctx)
-	user, err := repo.GetByID(userID)
+	user, err := s.repo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +125,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uint, username, 
 	updates := map[string]any{}
 
 	if username != nil && *username != user.Username {
-		_, err := repo.GetByUsername(*username)
+		_, err := s.repo.GetByUsername(ctx, *username)
 		switch {
 		case err == nil:
 			return nil, ErrUserExited
@@ -147,7 +146,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uint, username, 
 		return user, nil
 	}
 
-	if err := repo.UpdateProfile(userID, updates); err != nil {
+	if err := s.repo.UpdateProfile(ctx, userID, updates); err != nil {
 		return nil, err
 	}
 

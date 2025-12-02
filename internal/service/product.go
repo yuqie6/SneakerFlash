@@ -40,8 +40,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, product *model.Produ
 		return fmt.Errorf("context is nil")
 	}
 
-	repo := s.repo.WithContext(ctx)
-	if err := repo.Create(product); err != nil {
+	if err := s.repo.Create(ctx, product); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || isMySQLDuplicate(err) {
 			return ErrProductDuplicate
 		}
@@ -50,7 +49,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, product *model.Produ
 
 	if err := s.SyncStockToRedis(ctx, product.ID, product.Stock); err != nil {
 		// 预热失败尝试回滚数据库记录，保持一致性
-		_ = repo.Delete(product.ID)
+		_ = s.repo.Delete(ctx, product.ID)
 		return err
 	}
 	return nil
@@ -69,7 +68,7 @@ func (s *ProductService) ListProducts(ctx context.Context, page, pageSize int) (
 	if ctx == nil {
 		return nil, 0, fmt.Errorf("context is nil")
 	}
-	return s.repo.WithContext(ctx).List(page, pageSize)
+	return s.repo.List(ctx, page, pageSize)
 }
 
 // GetProductByID 优先读缓存，singleflight 防击穿，null 哨兵防穿透，随机 TTL 防雪崩；库存以 Redis 为准。
@@ -77,7 +76,6 @@ func (s *ProductService) GetProductByID(ctx context.Context, id uint) (*model.Pr
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	repo := s.repo.WithContext(ctx)
 	cacheKey := fmt.Sprintf("product:info:%d", id)
 
 	// 查 redis
@@ -109,7 +107,7 @@ func (s *ProductService) GetProductByID(ctx context.Context, id uint) (*model.Pr
 		}
 
 		// 查数据库
-		p, err := repo.GetByID(id)
+		p, err := s.repo.GetByID(ctx, id)
 		if err != nil {
 			// 查不到, 设置 null
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -155,8 +153,7 @@ func (s *ProductService) UpdateProduct(ctx context.Context, userID, id uint, dat
 	if len(data) == 0 {
 		return nil
 	}
-	repo := s.repo.WithContext(ctx)
-	rows, err := repo.UpdateByUser(id, userID, data)
+	rows, err := s.repo.UpdateByUser(ctx, id, userID, data)
 	if err != nil {
 		return err
 	}
@@ -171,12 +168,11 @@ func (s *ProductService) DeleteProduct(ctx context.Context, userID, id uint) err
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
 	}
-	repo := s.repo.WithContext(ctx)
-	p, err := repo.GetByIDAndUser(id, userID)
+	p, err := s.repo.GetByIDAndUser(ctx, id, userID)
 	if err != nil {
 		return err
 	}
-	return repo.Delete(p.ID)
+	return s.repo.Delete(ctx, p.ID)
 }
 
 // ListUserProducts 查询用户发布的商品列表。
@@ -184,5 +180,5 @@ func (s *ProductService) ListUserProducts(ctx context.Context, userID uint, page
 	if ctx == nil {
 		return nil, 0, fmt.Errorf("context is nil")
 	}
-	return s.repo.WithContext(ctx).ListByUserID(userID, page, size)
+	return s.repo.ListByUserID(ctx, userID, page, size)
 }
