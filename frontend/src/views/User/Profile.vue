@@ -65,12 +65,12 @@ const fetchOrderStats = async () => {
   orderStats.loading = true
   try {
     const res = await api.get<
-      { items: Order[]; total: number },
-      { items: Order[]; total: number }
-    >("/orders", { params: { page: 1, size: 100 } })
+      { list: Order[]; total: number },
+      { list: Order[]; total: number }
+    >("/orders", { params: { page: 1, page_size: 100 } })
     orderStats.total = res.total
-    orderStats.pending = res.items.filter((o) => o.status === 0).length
-    orderStats.paid = res.items.filter((o) => o.status === 1).length
+    orderStats.pending = res.list.filter((o) => o.status === 0).length
+    orderStats.paid = res.list.filter((o) => o.status === 1).length
   } catch {
     /* ignore */
   } finally {

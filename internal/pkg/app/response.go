@@ -41,6 +41,23 @@ func (g *Gin) Success(data any) {
 	g.Response(http.StatusOK, e.SUCCESS, data)
 }
 
+// 分页响应
+type PageData struct {
+	List     any   `json:"list"`
+	Total    int64 `json:"total"`
+	Page     int   `json:"page"`
+	PageSize int   `json:"page_size"`
+}
+
+func (g *Gin) SuccessWithPage(list any, total int64, page, pageSize int) {
+	g.Response(http.StatusOK, e.SUCCESS, PageData{
+		List:     list,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
+}
+
 // 错误响应
 func (g *Gin) Error(httpCode, errCode int) {
 	g.Response(httpCode, errCode, nil)

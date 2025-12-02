@@ -19,6 +19,12 @@ const (
 	CouponStatusExpired   CouponStatus = "expired"
 )
 
+// 券模板状态
+const (
+	CouponTemplateStatusActive   = "active"
+	CouponTemplateStatusInactive = "inactive"
+)
+
 type Coupon struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`
 	Type          CouponType `gorm:"type:varchar(20);not null" json:"type"`

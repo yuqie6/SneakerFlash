@@ -35,6 +35,20 @@ const docTemplate = `{
                         "description": "available/used/expired",
                         "name": "status",
                         "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -196,7 +210,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 10,
                         "description": "每页条数",
-                        "name": "size",
+                        "name": "page_size",
                         "in": "query"
                     },
                     {
@@ -219,6 +233,63 @@ const docTemplate = `{
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/handler.OrderListResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/poll/{order_num}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "订单"
+                ],
+                "summary": "轮询订单创建状态",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "订单号",
+                        "name": "order_num",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.OrderWithPaymentResponse"
                                         }
                                     }
                                 }
@@ -275,7 +346,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/handler.OrderWithPaymentResponse"
+                                            "$ref": "#/definitions/handler.PollOrderResponse"
                                         }
                                     }
                                 }
@@ -508,7 +579,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 10,
                         "description": "每页条数",
-                        "name": "size",
+                        "name": "page_size",
                         "in": "query"
                     }
                 ],
@@ -626,7 +697,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 10,
                         "description": "每页条数",
-                        "name": "size",
+                        "name": "page_size",
                         "in": "query"
                     }
                 ],
@@ -1401,6 +1472,26 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.PollOrderResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "order": {
+                    "$ref": "#/definitions/service.OrderWithPayment"
+                },
+                "order_num": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "handler.ProductListResponse": {
             "type": "object",
             "properties": {
@@ -1507,6 +1598,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_id": {
+                    "type": "string"
+                },
+                "status": {
                     "type": "string"
                 }
             }
@@ -1660,6 +1754,38 @@ const docTemplate = `{
                 "OrderStatusFailed"
             ]
         },
+        "model.Payment": {
+            "type": "object",
+            "properties": {
+                "amount_cents": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "notify_data": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "integer"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/model.PaymentStatus"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "model.PaymentStatus": {
             "type": "string",
             "enum": [
@@ -1745,6 +1871,20 @@ const docTemplate = `{
                 },
                 "valid_to": {
                     "type": "string"
+                }
+            }
+        },
+        "service.OrderWithPayment": {
+            "type": "object",
+            "properties": {
+                "coupon": {
+                    "$ref": "#/definitions/service.MyCoupon"
+                },
+                "order": {
+                    "$ref": "#/definitions/model.Order"
+                },
+                "payment": {
+                    "$ref": "#/definitions/model.Payment"
                 }
             }
         },

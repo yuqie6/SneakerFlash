@@ -149,10 +149,13 @@ const fetchVipProfile = async () => {
 const fetchCoupons = async () => {
   loadingCoupons.value = true
   try {
-    const res = await api.get<Coupon[], Coupon[]>("/coupons/mine", {
-      params: { status: couponStatus.value || undefined },
+    const res = await api.get<
+      { list: Coupon[]; total: number; page: number; page_size: number },
+      { list: Coupon[]; total: number; page: number; page_size: number }
+    >("/coupons/mine", {
+      params: { status: couponStatus.value || undefined, page: 1, page_size: 100 },
     })
-    coupons.value = Array.isArray(res) ? res : []
+    coupons.value = Array.isArray(res.list) ? res.list : []
   } catch (err: any) {
     toast.error(err?.message || "获取优惠券失败")
   } finally {

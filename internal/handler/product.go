@@ -152,7 +152,7 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 // @Tags 商品
 // @Produce json
 // @Param page query int false "页码" default(1)
-// @Param size query int false "每页条数" default(10)
+// @Param page_size query int false "每页条数" default(10)
 // @Success 200 {object} app.Response{data=ProductListResponse}
 // @Failure 400 {object} app.Response "参数错误"
 // @Router /products [get]
@@ -164,23 +164,19 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
-	size, err := strconv.Atoi(c.DefaultQuery("size", "10"))
+	pageSize, err := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	if err != nil {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
 
-	list, total, err := h.svc.ListProducts(ctx, page, size)
+	list, total, err := h.svc.ListProducts(ctx, page, pageSize)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
 
-	appG.Success(gin.H{
-		"items": list,
-		"total": total,
-		"page":  page,
-	})
+	appG.SuccessWithPage(list, total, page, pageSize)
 }
 
 // UpdateProduct 更新商品（仅创建者）
@@ -295,7 +291,7 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
-// @Param size query int false "每页条数" default(10)
+// @Param page_size query int false "每页条数" default(10)
 // @Success 200 {object} app.Response{data=ProductListWithSizeResponse}
 // @Failure 400 {object} app.Response "参数错误"
 // @Failure 401 {object} app.Response "未登录"
@@ -315,21 +311,16 @@ func (h *ProductHandler) ListMyProducts(c *gin.Context) {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
-	size, err := strconv.Atoi(c.DefaultQuery("size", "10"))
-	if err != nil || size <= 0 {
+	pageSize, err := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	if err != nil || pageSize <= 0 {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
 
-	list, total, err := h.svc.ListUserProducts(ctx, userID, page, size)
+	list, total, err := h.svc.ListUserProducts(ctx, userID, page, pageSize)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
-	appG.Success(gin.H{
-		"items": list,
-		"total": total,
-		"page":  page,
-		"size":  size,
-	})
+	appG.SuccessWithPage(list, total, page, pageSize)
 }

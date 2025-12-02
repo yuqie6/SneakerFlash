@@ -47,7 +47,7 @@ func NewOrderHandler(orderSvc *service.OrderService) *OrderHandler {
 // @Produce json
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
-// @Param size query int false "每页条数" default(10)
+// @Param page_size query int false "每页条数" default(10)
 // @Param status query int false "订单状态：0未支付 1已支付 2失败"
 // @Success 200 {object} app.Response{data=OrderListResponse}
 // @Failure 400 {object} app.Response "参数错误"
@@ -73,8 +73,8 @@ func (h *OrderHandler) ListOrders(c *gin.Context) {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
-	size, err := strconv.Atoi(c.DefaultQuery("size", "10"))
-	if err != nil || size <= 0 {
+	pageSize, err := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	if err != nil || pageSize <= 0 {
 		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
 		return
 	}
@@ -90,18 +90,13 @@ func (h *OrderHandler) ListOrders(c *gin.Context) {
 		statusPtr = &status
 	}
 
-	orders, total, err := h.orderSvc.ListOrders(ctx, userID, statusPtr, page, size)
+	orders, total, err := h.orderSvc.ListOrders(ctx, userID, statusPtr, page, pageSize)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
 
-	appG.Success(gin.H{
-		"items": orders,
-		"total": total,
-		"page":  page,
-		"size":  size,
-	})
+	appG.SuccessWithPage(orders, total, page, pageSize)
 }
 
 // GetOrder 订单详情

@@ -5,17 +5,17 @@ import (
 	"SneakerFlash/internal/pkg/e"
 	"SneakerFlash/internal/service"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
 type CouponHandler struct {
-	svc    *service.CouponService
-	vipSvc *service.VIPService
+	svc *service.CouponService
 }
 
-func NewCouponHandler(svc *service.CouponService, vipSvc *service.VIPService) *CouponHandler {
-	return &CouponHandler{svc: svc, vipSvc: vipSvc}
+func NewCouponHandler(svc *service.CouponService) *CouponHandler {
+	return &CouponHandler{svc: svc}
 }
 
 // ListMyCoupons 我的优惠券列表
@@ -24,6 +24,8 @@ func NewCouponHandler(svc *service.CouponService, vipSvc *service.VIPService) *C
 // @Produce json
 // @Security BearerAuth
 // @Param status query string false "available/used/expired"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
 // @Success 200 {object} app.Response{data=[]service.MyCoupon}
 // @Router /coupons/mine [get]
 func (h *CouponHandler) ListMyCoupons(c *gin.Context) {
@@ -41,18 +43,16 @@ func (h *CouponHandler) ListMyCoupons(c *gin.Context) {
 		return
 	}
 
-	// 登录时触发当月 VIP 配额发券
-	if profile, err := h.vipSvc.Profile(ctx, userID); err == nil {
-		_ = h.svc.IssueVIPMonthly(ctx, userID, profile.EffectiveLevel)
-	}
-
 	status := c.Query("status")
-	list, err := h.svc.ListUserCoupons(ctx, userID, status)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	list, total, err := h.svc.ListUserCoupons(ctx, userID, status, page, pageSize)
 	if err != nil {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
-	appG.Success(list)
+	appG.SuccessWithPage(list, total, page, pageSize)
 }
 
 type PurchaseCouponReq struct {

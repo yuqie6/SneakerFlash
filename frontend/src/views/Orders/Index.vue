@@ -12,7 +12,7 @@ const state = reactive({
   items: [] as Order[],
   total: 0,
   page: 1,
-  size: 10,
+  pageSize: 10,
   loading: false,
   status: "",
 })
@@ -21,16 +21,16 @@ const fetchOrders = async () => {
   state.loading = true
   try {
     const res = await api.get<
-      { items: Order[]; total: number; page: number; size: number },
-      { items: Order[]; total: number; page: number; size: number }
+      { list: Order[]; total: number; page: number; page_size: number },
+      { list: Order[]; total: number; page: number; page_size: number }
     >("/orders", {
       params: {
         page: state.page,
-        size: state.size,
+        page_size: state.pageSize,
         status: state.status || undefined,
       },
     })
-    state.items = res.items
+    state.items = res.list
     state.total = res.total
   } catch (err: any) {
     toast.error(err?.message || "获取订单失败")
@@ -140,10 +140,10 @@ onMounted(fetchOrders)
       </div>
 
       <div v-if="state.items.length > 0" class="mt-6 flex items-center justify-between text-sm text-white/70">
-        <span>第 {{ state.page }} 页 / 共 {{ Math.ceil(state.total / state.size) || 1 }} 页</span>
+        <span>第 {{ state.page }} 页 / 共 {{ Math.ceil(state.total / state.pageSize) || 1 }} 页</span>
         <div class="flex gap-3">
           <MagmaButton :disabled="state.page <= 1 || state.loading" @click="onPage(-1)">上一页</MagmaButton>
-          <MagmaButton :disabled="state.page * state.size >= state.total || state.loading" @click="onPage(1)">下一页</MagmaButton>
+          <MagmaButton :disabled="state.page * state.pageSize >= state.total || state.loading" @click="onPage(1)">下一页</MagmaButton>
         </div>
       </div>
     </section>

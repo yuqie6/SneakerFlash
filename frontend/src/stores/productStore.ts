@@ -2,10 +2,11 @@ import { defineStore } from "pinia"
 import api from "@/lib/api"
 import type { Product } from "@/types/product"
 
-type ProductListResponse = {
-  items: Product[]
+type PageResponse<T> = {
+  list: T[]
   total: number
   page: number
+  page_size: number
 }
 
 type ProductDetailResponse = Product
@@ -23,11 +24,11 @@ export const useProductStore = defineStore("product", {
     detail: (state) => (id: number) => state.detailMap.get(id),
   },
   actions: {
-    async fetchProducts(page = 1, size = 10, append = false) {
+    async fetchProducts(page = 1, pageSize = 10, append = false) {
       this.loading = true
       try {
-        const res = await api.get<ProductListResponse, ProductListResponse>("/products", { params: { page, size } })
-        const list = Array.isArray(res?.items) ? res.items : []
+        const res = await api.get<PageResponse<Product>, PageResponse<Product>>("/products", { params: { page, page_size: pageSize } })
+        const list = Array.isArray(res?.list) ? res.list : []
         const total = Number(res?.total) || list.length
         this.items = append ? [...this.items, ...list] : list
         this.total = total
@@ -47,14 +48,14 @@ export const useProductStore = defineStore("product", {
       const idx = this.items.findIndex((p) => p.id === product.id)
       if (idx >= 0) this.items[idx] = product
     },
-    async fetchMyProducts(page = 1, size = 10) {
+    async fetchMyProducts(page = 1, pageSize = 10) {
       this.loading = true
       try {
-        const res = await api.get<{ items: Product[]; total: number; page: number }, { items: Product[]; total: number; page: number }>(
+        const res = await api.get<PageResponse<Product>, PageResponse<Product>>(
           "/products/mine",
-          { params: { page, size } }
+          { params: { page, page_size: pageSize } }
         )
-        this.myItems = res.items || []
+        this.myItems = res.list || []
         this.myTotal = Number(res.total) || this.myItems.length
       } finally {
         this.loading = false

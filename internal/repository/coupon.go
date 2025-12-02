@@ -18,16 +18,46 @@ func NewCouponRepo(db *gorm.DB) *CouponRepo {
 	return &CouponRepo{db: db}
 }
 
-func (r *CouponRepo) DB() *gorm.DB {
-	return r.db
-}
-
 func (r *CouponRepo) GetByID(ctx context.Context, id uint) (*model.Coupon, error) {
 	var c model.Coupon
 	if err := r.db.WithContext(ctx).First(&c, id).Error; err != nil {
 		return nil, err
 	}
 	return &c, nil
+}
+
+// ListByIDs 批量按 ID 查询券模板。
+func (r *CouponRepo) ListByIDs(ctx context.Context, ids []uint) ([]model.Coupon, error) {
+	var cs []model.Coupon
+	if len(ids) == 0 {
+		return cs, nil
+	}
+	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&cs).Error; err != nil {
+		return nil, err
+	}
+	return cs, nil
+}
+
+// GetByTitle 按标题查询券模板。
+func (r *CouponRepo) GetByTitle(ctx context.Context, title string) (*model.Coupon, error) {
+	var c model.Coupon
+	if err := r.db.WithContext(ctx).Where("title = ?", title).First(&c).Error; err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// Create 创建券模板。
+func (r *CouponRepo) Create(ctx context.Context, coupon *model.Coupon) error {
+	return r.db.WithContext(ctx).Create(coupon).Error
+}
+
+// FirstOrCreate 按条件查询或创建券模板，并发安全。
+func (r *CouponRepo) FirstOrCreate(ctx context.Context, coupon *model.Coupon, query string, args ...any) (*model.Coupon, error) {
+	if err := r.db.WithContext(ctx).Where(query, args...).FirstOrCreate(coupon).Error; err != nil {
+		return nil, err
+	}
+	return coupon, nil
 }
 
 type UserCouponRepo struct {
@@ -38,8 +68,55 @@ func NewUserCouponRepo(db *gorm.DB) *UserCouponRepo {
 	return &UserCouponRepo{db: db}
 }
 
-func (r *UserCouponRepo) DB() *gorm.DB {
-	return r.db
+// ListByUserAndStatus 按用户和状态查询用户券列表，支持分页。
+// status 为空时查全部；now 用于过滤过期时间。
+func (r *UserCouponRepo) ListByUserAndStatus(ctx context.Context, userID uint, status string, now time.Time, page, pageSize int) ([]model.UserCoupon, int64, error) {
+	var ucs []model.UserCoupon
+	var total int64
+	q := r.db.WithContext(ctx).Model(&model.UserCoupon{}).Where("user_id = ?", userID)
+
+	switch status {
+	case string(model.CouponStatusAvailable):
+		q = q.Where("status = ? AND valid_to >= ?", model.CouponStatusAvailable, now)
+	case string(model.CouponStatusExpired):
+		q = q.Where("status = ? OR (status = ? AND valid_to < ?)",
+			model.CouponStatusExpired, model.CouponStatusAvailable, now)
+	case string(model.CouponStatusUsed):
+		q = q.Where("status = ?", model.CouponStatusUsed)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := q.Order("id desc").Offset(offset).Limit(pageSize).Find(&ucs).Error; err != nil {
+		return nil, 0, err
+	}
+	return ucs, total, nil
+}
+
+// GetByIDForUpdate 按 ID 查询并锁定用户券。
+func (r *UserCouponRepo) GetByIDForUpdate(ctx context.Context, id uint) (*model.UserCoupon, error) {
+	var uc model.UserCoupon
+	if err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+		First(&uc, id).Error; err != nil {
+		return nil, err
+	}
+	return &uc, nil
+}
+
+// Create 创建单个用户券。
+func (r *UserCouponRepo) Create(ctx context.Context, uc *model.UserCoupon) error {
+	return r.db.WithContext(ctx).Create(uc).Error
+}
+
+// BatchCreate 批量创建用户券。
+func (r *UserCouponRepo) BatchCreate(ctx context.Context, ucs []model.UserCoupon) error {
+	if len(ucs) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Create(&ucs).Error
 }
 
 // GetUsableForUpdate 查询可用券并加锁。

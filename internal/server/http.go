@@ -37,7 +37,7 @@ func NewHttpServer() *gin.Engine {
 	orderHandler := handler.NewOrderHandler(orderServicer)
 	uploadHandler := handler.NewUploadHandler(uploadServicer)
 	vipHandler := handler.NewVIPHandler(vipServicer)
-	couponHandler := handler.NewCouponHandler(couponServicer, vipServicer)
+	couponHandler := handler.NewCouponHandler(couponServicer)
 
 	// 注册路由
 	r := gin.New()

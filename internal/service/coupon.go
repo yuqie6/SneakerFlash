@@ -11,6 +11,17 @@ import (
 	"gorm.io/gorm"
 )
 
+// 业务错误定义
+var (
+	ErrCouponNotFound       = errors.New("优惠券不存在")
+	ErrCouponNotAvailable   = errors.New("优惠券不可用")
+	ErrCouponExpired        = errors.New("优惠券已过期")
+	ErrCouponNotPurchasable = errors.New("该优惠券不支持购买")
+	ErrCouponBelowThreshold = errors.New("订单金额未达到优惠券使用门槛")
+	ErrCouponInvalidRate    = errors.New("优惠券折扣率无效")
+	ErrCouponTypeInvalid    = errors.New("不支持的优惠券类型")
+)
+
 type CouponService struct {
 	db             *gorm.DB
 	couponRepo     *repository.CouponRepo
@@ -63,33 +74,58 @@ var vipTemplates = map[int]vipCouponTemplate{
 }
 
 // ApplyCoupon 校验并计算优惠后的金额，返回优惠后金额和需要核销的用户券记录。
-func (s *CouponService) ApplyCoupon(ctx context.Context, userID uint, couponID uint, originAmount int64) (*model.UserCoupon, *model.Coupon, int64, error) {
+func (s *CouponService) ApplyCoupon(ctx context.Context, userID uint, userCouponID uint, originAmount int64) (*model.UserCoupon, *model.Coupon, int64, error) {
 	if ctx == nil {
 		return nil, nil, 0, fmt.Errorf("context is nil")
 	}
 	now := time.Now()
-	// 查询并锁定用户券 + 读取券模板
-	uc, c, err := s.userCouponRepo.GetUsableForUpdate(ctx, userID, couponID, now)
+
+	// 查询并锁定用户券
+	uc, err := s.userCouponRepo.GetByIDForUpdate(ctx, userCouponID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, 0, ErrCouponNotFound
+		}
+		return nil, nil, 0, err
+	}
+
+	// 业务校验：归属、状态、有效期
+	if uc.UserID != userID {
+		return nil, nil, 0, ErrCouponNotFound
+	}
+	if uc.Status != model.CouponStatusAvailable {
+		return nil, nil, 0, ErrCouponNotAvailable
+	}
+	if now.Before(uc.ValidFrom) || now.After(uc.ValidTo) {
+		return nil, nil, 0, ErrCouponExpired
+	}
+
+	// 读取券模板
+	c, err := s.couponRepo.GetByID(ctx, uc.CouponID)
 	if err != nil {
 		return nil, nil, 0, err
 	}
+
+	// 校验门槛
 	if originAmount < c.MinSpendCents {
-		return nil, nil, 0, errors.New("amount below coupon threshold")
+		return nil, nil, 0, ErrCouponBelowThreshold
 	}
+
+	// 计算优惠后金额
 	newAmount := originAmount
 	switch c.Type {
 	case model.CouponTypeFullCut:
 		newAmount = originAmount - c.AmountCents
 	case model.CouponTypeDiscount:
 		if c.DiscountRate <= 0 || c.DiscountRate >= 100 {
-			return nil, nil, 0, errors.New("invalid discount rate")
+			return nil, nil, 0, ErrCouponInvalidRate
 		}
 		newAmount = originAmount * int64(c.DiscountRate) / 100
 	default:
-		return nil, nil, 0, errors.New("unsupported coupon type")
+		return nil, nil, 0, ErrCouponTypeInvalid
 	}
 	if newAmount < 0 {
-		newAmount = 0 // 优惠后不允许负数
+		newAmount = 0
 	}
 	return uc, c, newAmount, nil
 }
@@ -108,46 +144,42 @@ func (s *CouponService) ReleaseByOrder(ctx context.Context, orderID uint) error 
 	return s.userCouponRepo.ReleaseByOrder(ctx, orderID)
 }
 
-func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status string) ([]MyCoupon, error) {
+// ListUserCoupons 查询用户优惠券列表，支持分页。
+func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status string, page, pageSize int) ([]MyCoupon, int64, error) {
 	if ctx == nil {
-		return nil, fmt.Errorf("context is nil")
+		return nil, 0, fmt.Errorf("context is nil")
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
 	}
 	now := time.Now()
-	var ucs []model.UserCoupon
-	q := s.userCouponRepo.DB().WithContext(ctx).Where("user_id = ?", userID)
 
-	// 根据 status 参数构建查询条件，考虑过期时间
-	switch status {
-	case string(model.CouponStatusAvailable):
-		// 可用：status=available 且未过期
-		q = q.Where("status = ? AND valid_to >= ?", model.CouponStatusAvailable, now)
-	case string(model.CouponStatusExpired):
-		// 过期：status=expired 或 (status=available 且已过期)
-		q = q.Where("status = ? OR (status = ? AND valid_to < ?)",
-			model.CouponStatusExpired, model.CouponStatusAvailable, now)
-	case string(model.CouponStatusUsed):
-		q = q.Where("status = ?", model.CouponStatusUsed)
-	// 空字符串表示查询全部，不加 status 条件
-	}
-
-	if err := q.Order("id desc").Find(&ucs).Error; err != nil {
-		return nil, err
+	ucs, total, err := s.userCouponRepo.ListByUserAndStatus(ctx, userID, status, now, page, pageSize)
+	if err != nil {
+		return nil, 0, err
 	}
 	if len(ucs) == 0 {
-		return nil, nil
+		return nil, total, nil
 	}
+
 	ids := make([]uint, 0, len(ucs))
 	for _, uc := range ucs {
 		ids = append(ids, uc.CouponID)
 	}
-	var cs []model.Coupon
-	if err := s.couponRepo.DB().WithContext(ctx).Where("id IN ?", ids).Find(&cs).Error; err != nil {
-		return nil, err
+
+	cs, err := s.couponRepo.ListByIDs(ctx, ids)
+	if err != nil {
+		return nil, 0, err
 	}
+
 	cmap := make(map[uint]model.Coupon, len(cs))
 	for _, c := range cs {
 		cmap[c.ID] = c
 	}
+
 	out := make([]MyCoupon, 0, len(ucs))
 	for _, uc := range ucs {
 		c := cmap[uc.CouponID]
@@ -171,49 +203,66 @@ func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status
 			ObtainedFrom:  uc.ObtainedFrom,
 		})
 	}
-	return out, nil
+	return out, total, nil
 }
 
-// PurchaseCoupon 模拟购买：直接发一张券给用户（券需标记为 purchasable）。
+// PurchaseCoupon 购买优惠券，事务保护。
 func (s *CouponService) PurchaseCoupon(ctx context.Context, userID, couponID uint) (*MyCoupon, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
 
-	c, err := s.couponRepo.GetByID(ctx, couponID)
+	var result *MyCoupon
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		txCouponRepo := repository.NewCouponRepo(tx)
+		txUserCouponRepo := repository.NewUserCouponRepo(tx)
+
+		c, err := txCouponRepo.GetByID(ctx, couponID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrCouponNotFound
+			}
+			return err
+		}
+		if !c.Purchasable {
+			return ErrCouponNotPurchasable
+		}
+
+		now := time.Now()
+		uc := &model.UserCoupon{
+			UserID:       userID,
+			CouponID:     couponID,
+			Status:       model.CouponStatusAvailable,
+			ObtainedFrom: "purchase",
+			ValidFrom:    c.ValidFrom,
+			ValidTo:      c.ValidTo,
+			IssuedAt:     now,
+		}
+		if err := txUserCouponRepo.Create(ctx, uc); err != nil {
+			return err
+		}
+
+		result = &MyCoupon{
+			ID:            uc.ID,
+			CouponID:      uc.CouponID,
+			Type:          c.Type,
+			Title:         c.Title,
+			Description:   c.Description,
+			AmountCents:   c.AmountCents,
+			DiscountRate:  c.DiscountRate,
+			MinSpendCents: c.MinSpendCents,
+			Status:        uc.Status,
+			ValidFrom:     uc.ValidFrom,
+			ValidTo:       uc.ValidTo,
+			ObtainedFrom:  uc.ObtainedFrom,
+		}
+		return nil
+	})
+
 	if err != nil {
 		return nil, err
 	}
-	if !c.Purchasable {
-		return nil, errors.New("coupon not purchasable")
-	}
-	now := time.Now()
-	uc := model.UserCoupon{
-		UserID:       userID,
-		CouponID:     couponID,
-		Status:       model.CouponStatusAvailable,
-		ObtainedFrom: "purchase",
-		ValidFrom:    c.ValidFrom,
-		ValidTo:      c.ValidTo,
-		IssuedAt:     now,
-	}
-	if err := s.userCouponRepo.DB().WithContext(ctx).Create(&uc).Error; err != nil {
-		return nil, err
-	}
-	return &MyCoupon{
-		ID:            uc.ID,
-		CouponID:      uc.CouponID,
-		Type:          c.Type,
-		Title:         c.Title,
-		Description:   c.Description,
-		AmountCents:   c.AmountCents,
-		DiscountRate:  c.DiscountRate,
-		MinSpendCents: c.MinSpendCents,
-		Status:        uc.Status,
-		ValidFrom:     uc.ValidFrom,
-		ValidTo:       uc.ValidTo,
-		ObtainedFrom:  uc.ObtainedFrom,
-	}, nil
+	return result, nil
 }
 
 // IssueVIPMonthly 按月配额为指定等级的用户发券（幂等：当月超配额不再发）。
@@ -251,7 +300,7 @@ func (s *CouponService) IssueVIPMonthly(ctx context.Context, userID uint, level 
 	need := quota - int(existing)
 	now := time.Now()
 	ucs := make([]model.UserCoupon, 0, need)
-	for i := 0; i < need; i++ {
+	for range need {
 		ucs = append(ucs, model.UserCoupon{
 			UserID:       userID,
 			CouponID:     coupon.ID,
@@ -262,21 +311,12 @@ func (s *CouponService) IssueVIPMonthly(ctx context.Context, userID uint, level 
 			IssuedAt:     now,
 		})
 	}
-	return s.userCouponRepo.DB().WithContext(ctx).Create(&ucs).Error
+	return s.userCouponRepo.BatchCreate(ctx, ucs)
 }
 
+// ensureTemplate 确保券模板存在，使用 FirstOrCreate 保证并发安全。
 func (s *CouponService) ensureTemplate(ctx context.Context, tpl vipCouponTemplate) (*model.Coupon, error) {
-	var c model.Coupon
-	err := s.couponRepo.DB().WithContext(ctx).
-		Where("title = ?", tpl.Title).
-		First(&c).Error
-	if err == nil {
-		return &c, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-	c = model.Coupon{
+	coupon := &model.Coupon{
 		Title:         tpl.Title,
 		Type:          tpl.Type,
 		AmountCents:   tpl.AmountCents,
@@ -285,12 +325,9 @@ func (s *CouponService) ensureTemplate(ctx context.Context, tpl vipCouponTemplat
 		Purchasable:   false,
 		ValidFrom:     time.Now().AddDate(-1, 0, 0),
 		ValidTo:       time.Now().AddDate(1, 0, 0),
-		Status:        "active",
+		Status:        model.CouponTemplateStatusActive,
 	}
-	if err := s.couponRepo.DB().WithContext(ctx).Create(&c).Error; err != nil {
-		return nil, err
-	}
-	return &c, nil
+	return s.couponRepo.FirstOrCreate(ctx, coupon, "title = ?", tpl.Title)
 }
 
 func monthPeriod(now time.Time) (time.Time, time.Time) {
@@ -300,7 +337,6 @@ func monthPeriod(now time.Time) (time.Time, time.Time) {
 }
 
 // MarkExpiredCoupons 批量将已过期但 status 仍为 available 的券标记为 expired。
-// 适合在服务启动或定时任务中调用。
 func (s *CouponService) MarkExpiredCoupons(ctx context.Context) (int64, error) {
 	if ctx == nil {
 		return 0, fmt.Errorf("context is nil")
