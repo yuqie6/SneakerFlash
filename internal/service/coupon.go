@@ -113,11 +113,24 @@ func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
+	now := time.Now()
 	var ucs []model.UserCoupon
 	q := s.userCouponRepo.WithContext(ctx).DB().Where("user_id = ?", userID)
-	if status != "" {
-		q = q.Where("status = ?", status)
+
+	// 根据 status 参数构建查询条件，考虑过期时间
+	switch status {
+	case string(model.CouponStatusAvailable):
+		// 可用：status=available 且未过期
+		q = q.Where("status = ? AND valid_to >= ?", model.CouponStatusAvailable, now)
+	case string(model.CouponStatusExpired):
+		// 过期：status=expired 或 (status=available 且已过期)
+		q = q.Where("status = ? OR (status = ? AND valid_to < ?)",
+			model.CouponStatusExpired, model.CouponStatusAvailable, now)
+	case string(model.CouponStatusUsed):
+		q = q.Where("status = ?", model.CouponStatusUsed)
+	// 空字符串表示查询全部，不加 status 条件
 	}
+
 	if err := q.Order("id desc").Find(&ucs).Error; err != nil {
 		return nil, err
 	}
@@ -139,6 +152,11 @@ func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status
 	out := make([]MyCoupon, 0, len(ucs))
 	for _, uc := range ucs {
 		c := cmap[uc.CouponID]
+		// 实时修正状态：如果 status=available 但已过期，返回 expired
+		effectiveStatus := uc.Status
+		if uc.Status == model.CouponStatusAvailable && now.After(uc.ValidTo) {
+			effectiveStatus = model.CouponStatusExpired
+		}
 		out = append(out, MyCoupon{
 			ID:            uc.ID,
 			CouponID:      uc.CouponID,
@@ -148,7 +166,7 @@ func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status
 			AmountCents:   c.AmountCents,
 			DiscountRate:  c.DiscountRate,
 			MinSpendCents: c.MinSpendCents,
-			Status:        uc.Status,
+			Status:        effectiveStatus,
 			ValidFrom:     uc.ValidFrom,
 			ValidTo:       uc.ValidTo,
 			ObtainedFrom:  uc.ObtainedFrom,
@@ -284,4 +302,13 @@ func monthPeriod(now time.Time) (time.Time, time.Time) {
 	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	end := start.AddDate(0, 1, 0)
 	return start, end
+}
+
+// MarkExpiredCoupons 批量将已过期但 status 仍为 available 的券标记为 expired。
+// 适合在服务启动或定时任务中调用。
+func (s *CouponService) MarkExpiredCoupons(ctx context.Context) (int64, error) {
+	if ctx == nil {
+		return 0, fmt.Errorf("context is nil")
+	}
+	return s.userCouponRepo.WithContext(ctx).MarkExpiredBatch(time.Now())
 }

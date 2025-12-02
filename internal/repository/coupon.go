@@ -79,6 +79,7 @@ func (r *UserCouponRepo) GetUsableForUpdate(userID, userCouponID uint, now time.
 	return &uc, &c, nil
 }
 
+// MarkUsed 标记卷为已使用
 func (r *UserCouponRepo) MarkUsed(userCouponID uint, orderID uint) error {
 	return r.db.Model(&model.UserCoupon{}).
 		Where("id = ?", userCouponID).
@@ -114,4 +115,12 @@ func (r *UserCouponRepo) CountByPeriod(userID uint, obtainedFrom string, start, 
 		Where("user_id = ? AND obtained_from = ? AND valid_from >= ? AND valid_from < ?", userID, obtainedFrom, start, end).
 		Count(&cnt).Error
 	return cnt, err
+}
+
+// MarkExpiredBatch 批量将已过期但 status 仍为 available 的券标记为 expired。
+func (r *UserCouponRepo) MarkExpiredBatch(now time.Time) (int64, error) {
+	tx := r.db.Model(&model.UserCoupon{}).
+		Where("status = ? AND valid_to < ?", model.CouponStatusAvailable, now).
+		Update("status", model.CouponStatusExpired)
+	return tx.RowsAffected, tx.Error
 }

@@ -9,6 +9,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 
@@ -21,6 +22,7 @@ import (
 	"SneakerFlash/internal/pkg/logger"
 	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/server"
+	"SneakerFlash/internal/service"
 )
 
 func main() {
@@ -32,6 +34,14 @@ func main() {
 	kafka.InitProducer(config.Conf.Data.Kafka)
 
 	db.MakeMigrate()
+
+	// 启动时批量更新过期优惠券
+	couponSvc := service.NewCouponService(db.DB)
+	if affected, err := couponSvc.MarkExpiredCoupons(context.Background()); err != nil {
+		slog.Warn("批量更新过期券失败", slog.Any("err", err))
+	} else if affected > 0 {
+		slog.Info("批量更新过期券完成", slog.Int64("affected", affected))
+	}
 
 	if err := utils.InitSnowflake(int64(config.Conf.Server.MachineID)); err != nil {
 		slog.Error("初始化雪花算法失败", slog.Any("err", err))
