@@ -144,8 +144,8 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 		Status:     PendingStatusPending,
 	})
 
-	// 异步刷新商品缓存，确保库存变化尽快同步（worker 成功后会再刷新）
-	go invalidateProductInfoCache(productID)
+	// 异步刷新商品缓存（worker pool + 去重）
+	invalidateProductInfoCache(productID)
 
 	return &SeckillResult{
 		OrderNum:  orderNum,

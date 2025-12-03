@@ -6,11 +6,72 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
 // pending 状态缓存 TTL，避免长时间占用内存。
 const pendingOrderTTL = 10 * time.Minute
+
+// 缓存 worker pool 配置
+const (
+	cacheWorkerCount   = 10    // worker 数量
+	cacheTaskChanSize  = 10000 // channel 缓冲大小
+)
+
+var (
+	// 缓存失效任务 channel
+	cacheInvalidateChan = make(chan uint, cacheTaskChanSize)
+	// 去重：正在处理或待处理的 productID
+	pendingInvalidate sync.Map
+	// 确保 invalidate worker 只启动一次
+	cacheInvalidateWorkerOnce sync.Once
+
+	// 库存刷新任务 channel
+	stockRefreshChan = make(chan uint, cacheTaskChanSize)
+	// 存储每个 productID 最新的 stock 值
+	pendingStockRefresh sync.Map
+	// 确保 stock refresh worker 只启动一次
+	stockRefreshWorkerOnce sync.Once
+)
+
+// initCacheInvalidateWorkers 启动缓存失效 worker pool
+func initCacheInvalidateWorkers() {
+	for range cacheWorkerCount {
+		go cacheInvalidateWorker()
+	}
+}
+
+// cacheInvalidateWorker 消费缓存失效任务
+func cacheInvalidateWorker() {
+	for productID := range cacheInvalidateChan {
+		ctx := context.Background()
+		key := fmt.Sprintf("product:info:%d", productID)
+		redis.RDB.Del(ctx, key)
+		// 删除完成，允许后续同 ID 任务进入
+		pendingInvalidate.Delete(productID)
+	}
+}
+
+// initStockRefreshWorkers 启动库存刷新 worker pool
+func initStockRefreshWorkers() {
+	for range cacheWorkerCount {
+		go stockRefreshWorker()
+	}
+}
+
+// stockRefreshWorker 消费库存刷新任务
+func stockRefreshWorker() {
+	for productID := range stockRefreshChan {
+		// 取出最新的 stock 值
+		val, ok := pendingStockRefresh.LoadAndDelete(productID)
+		if !ok {
+			continue
+		}
+		stock := val.(int)
+		_ = setStockCache(context.Background(), productID, stock)
+	}
+}
 
 type PendingOrderStatus string
 
@@ -94,18 +155,41 @@ func markPendingOrderFailed(ctx context.Context, orderNum, message string) {
 	})
 }
 
-// refreshStockCacheAsync 异步刷新库存缓存，失败忽略以避免阻塞主流程。
+// refreshStockCacheAsync 异步刷新库存缓存，使用 worker pool + 最新值覆盖。
 func refreshStockCacheAsync(productID uint, stock int) {
-	go func() {
-		// 异步刷新缓存，不依赖请求上下文
-		_ = setStockCache(context.Background(), productID, stock)
-	}()
+	// 延迟初始化 worker pool
+	stockRefreshWorkerOnce.Do(initStockRefreshWorkers)
+
+	// 存储最新的 stock 值（覆盖旧值）
+	_, alreadyPending := pendingStockRefresh.Swap(productID, stock)
+
+	// 如果已经在队列中，不需要重复发送
+	if alreadyPending {
+		return
+	}
+
+	// 非阻塞发送
+	select {
+	case stockRefreshChan <- productID:
+	default:
+		pendingStockRefresh.Delete(productID) // 没进队列，清除标记
+	}
 }
 
-// invalidateProductInfoCache 失效商品详情缓存，促使后续请求回源数据库。
+// invalidateProductInfoCache 异步失效商品详情缓存，使用 worker pool + 去重。
 func invalidateProductInfoCache(productID uint) {
-	// 常在异步场景调用，使用独立 context。
-	ctx := context.Background()
-	key := fmt.Sprintf("product:info:%d", productID)
-	redis.RDB.Del(ctx, key)
+	// 延迟初始化 worker pool
+	cacheInvalidateWorkerOnce.Do(initCacheInvalidateWorkers)
+
+	// 去重：如果该 productID 已在队列中，直接跳过
+	if _, exists := pendingInvalidate.LoadOrStore(productID, struct{}{}); exists {
+		return
+	}
+
+	// 非阻塞发送，channel 满了就丢弃（worker 成功后还会再刷新）
+	select {
+	case cacheInvalidateChan <- productID:
+	default:
+		pendingInvalidate.Delete(productID) // 没进队列，清除标记
+	}
 }

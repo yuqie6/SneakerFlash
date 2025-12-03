@@ -379,9 +379,9 @@ func (s *OrderService) HandlePaymentResult(ctx context.Context, paymentID string
 		}
 		if targetStatus == model.PaymentStatusPaid {
 			if product, pErr := txProductRepo.GetByID(ctx, order.ProductID); pErr == nil {
-				// 异步刷新缓存库存
+				// 异步刷新缓存库存（worker pool）
 				refreshStockCacheAsync(product.ID, product.Stock)
-				go invalidateProductInfoCache(product.ID)
+				invalidateProductInfoCache(product.ID)
 			}
 			// 成长值累积：按支付金额计算成长等级
 			txUserRepo := repository.NewUserRepo(tx)

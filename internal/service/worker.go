@@ -158,11 +158,11 @@ func (s *WorkerService) CreateOderFromMessage(msgBytes []byte) error {
 		markPendingOrderReady(logCtx, readyOrderNum, readyOrderID, readyPaymentID)
 	}
 
-	// 事务成功后刷新缓存/失效详情
+	// 事务成功后刷新缓存/失效详情（worker pool）
 	if latestStock >= 0 {
 		refreshStockCacheAsync(msg.ProductID, latestStock)
 	}
-	go invalidateProductInfoCache(msg.ProductID)
+	invalidateProductInfoCache(msg.ProductID)
 	return nil
 }
 
