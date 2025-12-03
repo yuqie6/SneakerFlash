@@ -10,11 +10,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// PaidPlan 付费 VIP 套餐配置
 type PaidPlan struct {
 	PlanID       int
-	Level        int
-	DurationDays int
-	PriceCents   int64
+	Level        int   // VIP 等级
+	DurationDays int   // 有效天数
+	PriceCents   int64 // 价格（分）
 }
 
 // 简单预置两个付费 VIP 套餐，可按需扩展。
@@ -23,14 +24,16 @@ var paidPlans = map[int]PaidPlan{
 	2: {PlanID: 2, Level: 4, DurationDays: 90, PriceCents: 8000}, // L4 90 天
 }
 
+// VIPProfile 用户 VIP 状态视图
 type VIPProfile struct {
-	TotalSpentCents int64     `json:"total_spent_cents"`
-	GrowthLevel     int       `json:"growth_level"`
-	PaidLevel       int       `json:"paid_level"`
-	PaidExpiredAt   time.Time `json:"paid_expired_at"`
-	EffectiveLevel  int       `json:"effective_level"`
+	TotalSpentCents int64     `json:"total_spent_cents"` // 累计消费（分）
+	GrowthLevel     int       `json:"growth_level"`      // 成长等级（消费累计）
+	PaidLevel       int       `json:"paid_level"`        // 付费等级
+	PaidExpiredAt   time.Time `json:"paid_expired_at"`   // 付费到期时间
+	EffectiveLevel  int       `json:"effective_level"`   // 生效等级 = max(成长, 付费)
 }
 
+// VIPService VIP 服务，处理等级查询和付费开通。
 type VIPService struct {
 	db          *gorm.DB
 	userRepo    *repository.UserRepo
@@ -45,6 +48,7 @@ func NewVIPService(db *gorm.DB, userRepo *repository.UserRepo) *VIPService {
 	}
 }
 
+// Profile 查询用户 VIP 状态，合并成长等级与付费等级。
 func (s *VIPService) Profile(ctx context.Context, userID uint) (*VIPProfile, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")

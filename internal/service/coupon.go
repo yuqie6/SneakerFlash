@@ -22,6 +22,7 @@ var (
 	ErrCouponTypeInvalid    = errors.New("不支持的优惠券类型")
 )
 
+// CouponService 优惠券服务，处理发券、核销、VIP 月度配额等。
 type CouponService struct {
 	db             *gorm.DB
 	couponRepo     *repository.CouponRepo
@@ -36,28 +37,31 @@ func NewCouponService(db *gorm.DB) *CouponService {
 	}
 }
 
+// MyCoupon 用户券视图，合并券模板与用户持有信息。
 type MyCoupon struct {
-	ID            uint               `json:"id"`
-	CouponID      uint               `json:"coupon_id"`
-	Type          model.CouponType   `json:"type"`
+	ID            uint               `json:"id"`              // 用户券 ID
+	CouponID      uint               `json:"coupon_id"`       // 券模板 ID
+	Type          model.CouponType   `json:"type"`            // full_cut/discount
 	Title         string             `json:"title"`
 	Description   string             `json:"description"`
-	AmountCents   int64              `json:"amount_cents"`
-	DiscountRate  int                `json:"discount_rate"`
-	MinSpendCents int64              `json:"min_spend_cents"`
+	AmountCents   int64              `json:"amount_cents"`    // 满减金额（分）
+	DiscountRate  int                `json:"discount_rate"`   // 折扣率，如 90 表示九折
+	MinSpendCents int64              `json:"min_spend_cents"` // 使用门槛（分）
 	Status        model.CouponStatus `json:"status"`
 	ValidFrom     time.Time          `json:"valid_from"`
 	ValidTo       time.Time          `json:"valid_to"`
-	ObtainedFrom  string             `json:"obtained_from"`
+	ObtainedFrom  string             `json:"obtained_from"` // purchase/vip_month
 }
 
+// vipMonthlyQuota VIP 等级对应的月度发券配额
 var vipMonthlyQuota = map[int]int{
-	1: 1,
-	2: 2,
+	1: 1, // L1 每月 1 张
+	2: 2, // L2 每月 2 张
 	3: 3,
 	4: 4,
 }
 
+// vipCouponTemplate VIP 月度券模板配置
 type vipCouponTemplate struct {
 	Title         string
 	Type          model.CouponType
@@ -66,11 +70,12 @@ type vipCouponTemplate struct {
 	MinSpendCents int64
 }
 
+// vipTemplates 各等级 VIP 月度券规格
 var vipTemplates = map[int]vipCouponTemplate{
-	1: {Title: "VIP L1 月度券", Type: model.CouponTypeFullCut, AmountCents: 500, MinSpendCents: 3000},
-	2: {Title: "VIP L2 月度券", Type: model.CouponTypeFullCut, AmountCents: 1000, MinSpendCents: 5000},
-	3: {Title: "VIP L3 月度券", Type: model.CouponTypeDiscount, DiscountRate: 90, MinSpendCents: 0},
-	4: {Title: "VIP L4 月度券", Type: model.CouponTypeDiscount, DiscountRate: 85, MinSpendCents: 0},
+	1: {Title: "VIP L1 月度券", Type: model.CouponTypeFullCut, AmountCents: 500, MinSpendCents: 3000},   // 满30减5
+	2: {Title: "VIP L2 月度券", Type: model.CouponTypeFullCut, AmountCents: 1000, MinSpendCents: 5000},  // 满50减10
+	3: {Title: "VIP L3 月度券", Type: model.CouponTypeDiscount, DiscountRate: 90, MinSpendCents: 0},     // 九折
+	4: {Title: "VIP L4 月度券", Type: model.CouponTypeDiscount, DiscountRate: 85, MinSpendCents: 0},     // 八五折
 }
 
 // ApplyCoupon 校验并计算优惠后的金额，返回优惠后金额和需要核销的用户券记录。
@@ -130,6 +135,7 @@ func (s *CouponService) ApplyCoupon(ctx context.Context, userID uint, userCoupon
 	return uc, c, newAmount, nil
 }
 
+// MarkUsed 标记券已使用，绑定订单 ID。
 func (s *CouponService) MarkUsed(ctx context.Context, userCouponID uint, orderID uint) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
@@ -137,6 +143,7 @@ func (s *CouponService) MarkUsed(ctx context.Context, userCouponID uint, orderID
 	return s.userCouponRepo.MarkUsed(ctx, userCouponID, orderID)
 }
 
+// ReleaseByOrder 释放订单占用的券（支付失败/退款时调用）。
 func (s *CouponService) ReleaseByOrder(ctx context.Context, orderID uint) error {
 	if ctx == nil {
 		return fmt.Errorf("context is nil")
@@ -330,6 +337,7 @@ func (s *CouponService) ensureTemplate(ctx context.Context, tpl vipCouponTemplat
 	return s.couponRepo.FirstOrCreate(ctx, coupon, "title = ?", tpl.Title)
 }
 
+// monthPeriod 返回当月起止时间，用于月度配额判断。
 func monthPeriod(now time.Time) (time.Time, time.Time) {
 	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	end := start.AddDate(0, 1, 0)

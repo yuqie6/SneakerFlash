@@ -41,6 +41,7 @@ var seckillScript = _redis.NewScript(`
 	return 1
 `)
 
+// SeckillService 秒杀服务，负责 Redis 原子扣减 + Kafka 投递。
 type SeckillService struct {
 	db          *gorm.DB
 	productRepo *repository.ProductRepo
@@ -60,11 +61,12 @@ var (
 	ErrSeckillNotStart = errors.New("活动尚未开始")
 )
 
+// SeckillResult 秒杀接口返回，前端据此轮询订单状态。
 type SeckillResult struct {
 	OrderID   uint   `json:"order_id,omitempty"`
 	OrderNum  string `json:"order_num"`
 	PaymentID string `json:"payment_id"`
-	Status    string `json:"status"`
+	Status    string `json:"status"` // pending/ready/failed
 }
 
 // Seckill 秒杀扣减库存并投递消息，由 worker 落库；Redis 原子扣减保护库存，投递失败回滚库存。

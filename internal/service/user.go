@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// UserService 用户服务，处理注册、登录、Token 刷新。
 type UserService struct {
 	repo *repository.UserRepo
 }

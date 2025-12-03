@@ -20,6 +20,7 @@ var (
 	ErrOrderNotPayable      = errors.New("订单状态不可支付")
 )
 
+// OrderService 订单服务，处理订单查询、优惠券核销、支付回调。
 type OrderService struct {
 	db          *gorm.DB
 	orderRepo   *repository.OrderRepo
@@ -29,6 +30,7 @@ type OrderService struct {
 	couponSvc   *CouponService
 }
 
+// OrderWithPayment 订单聚合视图，含支付单和已用优惠券。
 type OrderWithPayment struct {
 	Order   *model.Order   `json:"order"`
 	Payment *model.Payment `json:"payment,omitempty"`
@@ -56,6 +58,7 @@ func NewOrderService(db *gorm.DB, productRepo *repository.ProductRepo, userRepo 
 	}
 }
 
+// toMyCoupon 将用户券和券模板转换为前端视图。
 func toMyCoupon(uc *model.UserCoupon, c *model.Coupon) *MyCoupon {
 	if uc == nil || c == nil {
 		return nil

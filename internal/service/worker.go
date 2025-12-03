@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// WorkerService Kafka 消费者服务，负责秒杀消息落库。
 type WorkerService struct {
 	db          *gorm.DB
 	productRepo *repository.ProductRepo
