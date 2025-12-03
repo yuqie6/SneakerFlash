@@ -44,6 +44,14 @@ func (r *ProductRepo) ReduceStockDB(ctx context.Context, id uint) (int64, error)
 	return result.RowsAffected, result.Error
 }
 
+// ReduceStockDBBatch 批量扣减库存，确保剩余库存 >= count 时才扣减。
+func (r *ProductRepo) ReduceStockDBBatch(ctx context.Context, id uint, count int) (int64, error) {
+	result := r.db.WithContext(ctx).Model(&model.Product{}).
+		Where("id = ? AND stock >= ?", id, count).
+		Update("stock", gorm.Expr("stock - ?", count))
+	return result.RowsAffected, result.Error
+}
+
 // Create 插入新商品。
 func (r *ProductRepo) Create(ctx context.Context, product *model.Product) error {
 	return r.db.WithContext(ctx).Create(product).Error

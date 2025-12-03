@@ -58,8 +58,10 @@ type RedisConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers []string `mapstructure:"brokers"`
-	Topic   string   `mapstructure:"topic"`
+	Brokers       []string `mapstructure:"brokers"`
+	Topic         string   `mapstructure:"topic"`
+	BatchSize     int      `mapstructure:"batch_size"`      // 批量消费数量，默认 100
+	FlushInterval int      `mapstructure:"flush_interval"`  // 最大等待时间(ms)，默认 200
 }
 
 type LoggerConfig struct {

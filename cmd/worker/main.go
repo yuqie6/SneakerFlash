@@ -30,5 +30,6 @@ func main() {
 
 	workerSvc := service.NewWorkerService(db.DB, productRepo, orderRepo)
 
-	kafka.StartConsumer(config.Conf.Data.Kafka, workerSvc.CreateOderFromMessage)
+	// 使用批量消费模式，大幅提升 TPS
+	kafka.StartBatchConsumer(config.Conf.Data.Kafka, workerSvc.BatchCreateOrdersFromMessages)
 }

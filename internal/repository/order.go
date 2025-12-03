@@ -84,3 +84,15 @@ func (r *OrderRepo) UpdateStatusIfMatch(ctx context.Context, orderID uint, fromS
 	tx := r.db.WithContext(ctx).Model(&model.Order{}).Where("id = ? AND status = ?", orderID, fromStatus).Update("status", toStatus)
 	return tx.RowsAffected, tx.Error
 }
+
+// GetByOrderNums 批量查询订单号对应的订单，用于批量幂等检查。
+func (r *OrderRepo) GetByOrderNums(ctx context.Context, orderNums []string) ([]*model.Order, error) {
+	var orders []*model.Order
+	if len(orderNums) == 0 {
+		return orders, nil
+	}
+	if err := r.db.WithContext(ctx).Where("order_num IN ?", orderNums).Find(&orders).Error; err != nil {
+		return nil, err
+	}
+	return orders, nil
+}
