@@ -64,58 +64,67 @@ func rateLimited(c *gin.Context, msg string) {
 	c.Abort()
 }
 
-func buildKeys(prefix, base string, c *gin.Context) []string {
-	keys := []string{fmt.Sprintf("%s:%s", prefix, base)} // 全局维度优先防爆款
-	if uidAny, ok := c.Get("userID"); ok {
-		keys = append(keys, fmt.Sprintf("%s:uid:%v:%s", prefix, uidAny, base))
-	}
-	if dev := deviceID(c); dev != "" {
-		keys = append(keys, fmt.Sprintf("%s:dev:%s:%s", prefix, dev, base))
-	}
-	if ip := clientIP(c); ip != "" {
-		keys = append(keys, fmt.Sprintf("%s:ip:%s:%s", prefix, ip, base))
-	}
-	if len(keys) == 0 {
-		keys = append(keys, fmt.Sprintf("%s:%s", prefix, base))
-	}
-	return keys
-}
-
-// InterfaceLimiter 针对接口路径做桶限流，优先按 userID，其次按 IP。
+// InterfaceLimiter 双层限流：本地限流 -> Redis 分布式限流
+// 本地限流先挡掉大部分超限请求，减少 Redis 压力
 func InterfaceLimiter(rdb *redis.Client, cfg LimitConfig, msg string) gin.HandlerFunc {
 	if cfg.Rate <= 0 || cfg.Burst <= 0 {
 		return func(c *gin.Context) { c.Next() }
 	}
+
+	// 本地限流器：rate 放大 2 倍，允许更多请求进入 Redis 层做精确控制
+	// 这样本地层主要挡住突发流量，精确限流交给 Redis
+	localLimiter := GetOrCreateLimiter(cfg.KeyPrefix, cfg.Rate*2, cfg.Burst*2)
+
 	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		for _, key := range buildKeys(cfg.KeyPrefix, c.FullPath(), c) {
-			if ok := allow(ctx, rdb, key, cfg); !ok {
-				rateLimited(c, msg)
-				return
-			}
+		// 第一层：本地限流（全局维度，快速拒绝）
+		globalKey := cfg.KeyPrefix + ":" + c.FullPath()
+		if !localLimiter.Allow(globalKey) {
+			rateLimited(c, msg)
+			return
 		}
+
+		// 第二层：Redis 分布式限流（只对全局维度做，减少 Redis 调用）
+		ctx := c.Request.Context()
+		if ok := allow(ctx, rdb, globalKey, cfg); !ok {
+			rateLimited(c, msg)
+			return
+		}
+
 		c.Next()
 	}
 }
 
-// ParamLimiter 针对参数值限流（如 product_id），配合 buildKey 兼容用户/IP 维度。
+// ParamLimiter 双层限流：针对参数值（如 product_id）
+// 本地限流先挡掉大部分超限请求，减少 Redis 压力
 func ParamLimiter(rdb *redis.Client, cfg LimitConfig, param string, msg string) gin.HandlerFunc {
 	if cfg.Rate <= 0 || cfg.Burst <= 0 {
 		return func(c *gin.Context) { c.Next() }
 	}
+
+	// 本地限流器
+	localLimiter := GetOrCreateLimiter(cfg.KeyPrefix+":param", cfg.Rate*2, cfg.Burst*2)
+
 	return func(c *gin.Context) {
-		ctx := c.Request.Context()
 		val := extractParam(c, param)
 		if val == "" {
 			c.Next()
 			return
 		}
-		for _, key := range buildKeys(cfg.KeyPrefix, val, c) {
-			if ok := allow(ctx, rdb, key, cfg); !ok {
-				rateLimited(c, msg)
-				return
-			}
+
+		// 第一层：本地限流
+		localKey := cfg.KeyPrefix + ":" + val
+		if !localLimiter.Allow(localKey) {
+			rateLimited(c, msg)
+			return
 		}
+
+		// 第二层：Redis 分布式限流（只对参数维度做一次）
+		ctx := c.Request.Context()
+		if ok := allow(ctx, rdb, localKey, cfg); !ok {
+			rateLimited(c, msg)
+			return
+		}
+
 		c.Next()
 	}
 }
@@ -208,17 +217,6 @@ func clientIP(c *gin.Context) string {
 		}
 	}
 	return c.ClientIP()
-}
-
-// deviceID 从请求头/查询获取设备标识，作为额外限流维度。
-func deviceID(c *gin.Context) string {
-	if v := strings.TrimSpace(c.GetHeader("X-Device-ID")); v != "" {
-		return v
-	}
-	if v := strings.TrimSpace(c.Query("device_id")); v != "" {
-		return v
-	}
-	return ""
 }
 
 func extractParam(c *gin.Context, name string) string {
