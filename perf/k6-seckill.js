@@ -1,7 +1,7 @@
 import http from 'k6/http';
-import { check, fail } from 'k6';
+import { check, fail, sleep } from 'k6';
 import exec from 'k6/execution';
-import { Rate } from 'k6/metrics';
+import { Rate, Counter } from 'k6/metrics';
 import { SharedArray } from 'k6/data';
 import papa from 'https://jslib.k6.io/papaparse/5.1.1/index.js';
 
@@ -23,6 +23,13 @@ const START_RATE = Number(__ENV.START_RATE || __ENV.RATE || '200');
 const successRate = new Rate('seckill_success_rate');
 const businessFailRate = new Rate('seckill_business_fail_rate');
 const httpErrorRate = new Rate('http_error_rate');
+// 细分业务错误码
+const soldOutRate = new Rate('seckill_sold_out');       // 30001 售罄
+const duplicateRate = new Rate('seckill_duplicate');    // 30002 重复抢购
+const rateLimitRate = new Rate('seckill_rate_limit');   // 701 限流
+const notStartedRate = new Rate('seckill_not_started'); // 30003 未开始
+// 成功计数
+const successCount = new Counter('seckill_success_count');
 
 const csvTokens = TOKEN_CSV
   ? new SharedArray('tokens-csv', () => {
@@ -178,7 +185,8 @@ function batchRegister(userNames) {
 }
 
 export function setup() {
-  const startTime = new Date(Date.now() + START_DELAY_SEC * 1000).toISOString();
+  const startTimestamp = Date.now() + START_DELAY_SEC * 1000;
+  const startTime = new Date(startTimestamp).toISOString();
   console.log(`秒杀开始时间: ${startTime}（延迟 ${START_DELAY_SEC}s）`);
 
   // 若提供 TOKEN_CSV，则直接读取 token 列，跳过注册/登录
@@ -187,12 +195,13 @@ export function setup() {
     // 记录初始库存
     const detailRes = getJson(`/product/${productId}`);
     const detailBody = safeJson(detailRes);
+    const initialStock = detailBody?.data?.stock ?? 0;
     if (detailRes.status === 200 && detailBody?.data) {
-      console.log(`初始库存: product_id=${productId} stock=${detailBody.data.stock}`);
+      console.log(`初始库存: product_id=${productId} stock=${initialStock}`);
     } else {
       console.log(`获取商品详情失败: status=${detailRes.status} body=${detailRes.body}`);
     }
-    return { productId };
+    return { productId, startTimestamp, initialStock };
   }
 
   const userNames = Array.from({ length: USER_COUNT }, (_, i) => `${USER_PREFIX}_${i}`);
@@ -217,16 +226,24 @@ export function setup() {
   // 记录初始库存，便于对比压测后库存变化（仅日志，不影响流程）
   const detailRes = getJson(`/product/${productId}`);
   const detailBody = safeJson(detailRes);
+  const initialStock = detailBody?.data?.stock ?? 0;
   if (detailRes.status === 200 && detailBody?.data) {
-    console.log(`初始库存: product_id=${productId} stock=${detailBody.data.stock}`);
+    console.log(`初始库存: product_id=${productId} stock=${initialStock}`);
   } else {
     console.log(`获取商品详情失败: status=${detailRes.status} body=${detailRes.body}`);
   }
 
-  return { tokens, productId };
+  return { tokens, productId, startTimestamp, initialStock };
 }
 
 export default function run(data) {
+  // 等待秒杀开始
+  const now = Date.now();
+  if (now < data.startTimestamp) {
+    const waitMs = data.startTimestamp - now;
+    sleep(waitMs / 1000);
+  }
+
   const tokenList = TOKEN_CSV ? csvTokens : data.tokens;
   if (!tokenList || tokenList.length === 0) {
     fail('token 列表为空，请检查 TOKEN_CSV 或注册/登录流程');
@@ -243,6 +260,19 @@ export default function run(data) {
   businessFailRate.add(res.status === 200 && body?.code !== 200);
   httpErrorRate.add(res.status >= 400);
 
+  // 细分业务错误码统计
+  if (ok) {
+    successCount.add(1);
+  } else if (body?.code === 30001) {
+    soldOutRate.add(1);
+  } else if (body?.code === 30002) {
+    duplicateRate.add(1);
+  } else if (body?.code === 701) {
+    rateLimitRate.add(1);
+  } else if (body?.code === 30003) {
+    notStartedRate.add(1);
+  }
+
   // VU1 限量打印业务失败，帮助定位失败原因
   if (!ok && __VU === 1 && failLogRemain > 0) {
     const tokenHint = token ? `${token.slice(0, 12)}...${token.slice(-6)}` : 'empty';
@@ -253,4 +283,20 @@ export default function run(data) {
   check(res, {
     'http 200': r => r.status === 200,
   });
+}
+
+export function teardown(data) {
+  console.log('========== 压测汇总 ==========');
+  console.log(`初始库存: ${data.initialStock}`);
+
+  // 获取最终库存
+  const res = getJson(`/product/${data.productId}`);
+  const body = safeJson(res);
+  const finalStock = body?.data?.stock ?? 'N/A';
+  console.log(`剩余库存: ${finalStock}`);
+
+  if (typeof finalStock === 'number') {
+    console.log(`售出数量: ${data.initialStock - finalStock}`);
+  }
+  console.log('==============================');
 }
