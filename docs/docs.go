@@ -1357,20 +1357,30 @@ const docTemplate = `{
                 "stock"
             ],
             "properties": {
+                "end_time": {
+                    "description": "可选，结束时间，不设置则永不过期",
+                    "type": "string",
+                    "example": "2025-12-10 12:00:00"
+                },
                 "image": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "https://example.com/shoe.jpg"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "限量球鞋"
                 },
                 "price": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 999
                 },
                 "start_time": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2025-12-10 10:00:00"
                 },
                 "stock": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 100
                 }
             }
         },
@@ -1622,20 +1632,30 @@ const docTemplate = `{
         "handler.UpdateProductReq": {
             "type": "object",
             "properties": {
+                "end_time": {
+                    "description": "可选，结束时间，空字符串清除",
+                    "type": "string",
+                    "example": "2025-12-10 12:00:00"
+                },
                 "image": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "https://example.com/shoe.jpg"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "限量球鞋"
                 },
                 "price": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 999
                 },
                 "start_time": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2025-12-10 10:00:00"
                 },
                 "stock": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 100
                 }
             }
         },
@@ -1807,6 +1827,10 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "end_time": {
+                    "description": "可选，NULL 表示永不过期",
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -1837,24 +1861,30 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount_cents": {
+                    "description": "满减金额（分）",
                     "type": "integer"
                 },
                 "coupon_id": {
+                    "description": "券模板 ID",
                     "type": "integer"
                 },
                 "description": {
                     "type": "string"
                 },
                 "discount_rate": {
+                    "description": "折扣率，如 90 表示九折",
                     "type": "integer"
                 },
                 "id": {
+                    "description": "用户券 ID",
                     "type": "integer"
                 },
                 "min_spend_cents": {
+                    "description": "使用门槛（分）",
                     "type": "integer"
                 },
                 "obtained_from": {
+                    "description": "purchase/vip_month",
                     "type": "string"
                 },
                 "status": {
@@ -1864,7 +1894,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "type": {
-                    "$ref": "#/definitions/model.CouponType"
+                    "description": "full_cut/discount",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.CouponType"
+                        }
+                    ]
                 },
                 "valid_from": {
                     "type": "string"
@@ -1892,18 +1927,23 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "effective_level": {
+                    "description": "生效等级 = max(成长, 付费)",
                     "type": "integer"
                 },
                 "growth_level": {
+                    "description": "成长等级（消费累计）",
                     "type": "integer"
                 },
                 "paid_expired_at": {
+                    "description": "付费到期时间",
                     "type": "string"
                 },
                 "paid_level": {
+                    "description": "付费等级",
                     "type": "integer"
                 },
                 "total_spent_cents": {
+                    "description": "累计消费（分）",
                     "type": "integer"
                 }
             }

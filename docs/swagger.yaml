@@ -22,15 +22,24 @@ definitions:
     type: object
   handler.CreateProductReq:
     properties:
+      end_time:
+        description: 可选，结束时间，不设置则永不过期
+        example: "2025-12-10 12:00:00"
+        type: string
       image:
+        example: https://example.com/shoe.jpg
         type: string
       name:
+        example: 限量球鞋
         type: string
       price:
+        example: 999
         type: number
       start_time:
+        example: "2025-12-10 10:00:00"
         type: string
       stock:
+        example: 100
         type: integer
     required:
     - name
@@ -199,15 +208,24 @@ definitions:
     type: object
   handler.UpdateProductReq:
     properties:
+      end_time:
+        description: 可选，结束时间，空字符串清除
+        example: "2025-12-10 12:00:00"
+        type: string
       image:
+        example: https://example.com/shoe.jpg
         type: string
       name:
+        example: 限量球鞋
         type: string
       price:
+        example: 999
         type: number
       start_time:
+        example: "2025-12-10 10:00:00"
         type: string
       stock:
+        example: 100
         type: integer
     type: object
   handler.UpdateProfileReq:
@@ -327,6 +345,9 @@ definitions:
     properties:
       created_at:
         type: string
+      end_time:
+        description: 可选，NULL 表示永不过期
+        type: string
       id:
         type: integer
       image:
@@ -347,25 +368,33 @@ definitions:
   service.MyCoupon:
     properties:
       amount_cents:
+        description: 满减金额（分）
         type: integer
       coupon_id:
+        description: 券模板 ID
         type: integer
       description:
         type: string
       discount_rate:
+        description: 折扣率，如 90 表示九折
         type: integer
       id:
+        description: 用户券 ID
         type: integer
       min_spend_cents:
+        description: 使用门槛（分）
         type: integer
       obtained_from:
+        description: purchase/vip_month
         type: string
       status:
         $ref: '#/definitions/model.CouponStatus'
       title:
         type: string
       type:
-        $ref: '#/definitions/model.CouponType'
+        allOf:
+        - $ref: '#/definitions/model.CouponType'
+        description: full_cut/discount
       valid_from:
         type: string
       valid_to:
@@ -383,14 +412,19 @@ definitions:
   service.VIPProfile:
     properties:
       effective_level:
+        description: 生效等级 = max(成长, 付费)
         type: integer
       growth_level:
+        description: 成长等级（消费累计）
         type: integer
       paid_expired_at:
+        description: 付费到期时间
         type: string
       paid_level:
+        description: 付费等级
         type: integer
       total_spent_cents:
+        description: 累计消费（分）
         type: integer
     type: object
 info:

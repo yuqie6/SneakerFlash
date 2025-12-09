@@ -16,6 +16,7 @@ type Product struct {
 	Price     float64        `gorm:"type:decimal(10,2);not null" json:"price"`
 	Stock     int            `gorm:"not null" json:"stock"`
 	StartTime time.Time      `gorm:"not null" json:"start_time"`
+	EndTime   *time.Time     `json:"end_time"` // 可选，NULL 表示永不过期
 	Image     string         `gorm:"type:varchar(255)" json:"image"`
 }
 

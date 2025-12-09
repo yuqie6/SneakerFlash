@@ -125,9 +125,19 @@ const stockStatus = computed(() => {
 })
 
 const seckillStatus = computed(() => {
+  // 判断是否已过期
+  const endTime = product.value?.end_time
+  if (endTime && new Date(endTime) < new Date()) {
+    return { text: "已结束", tone: "border-white/20 bg-white/5 text-white/50" }
+  }
   if (!isStarted.value) return { text: "即将开始", tone: "border-magma/40 bg-magma/15 text-magma" }
-  if (product.value?.stock === 0) return { text: "已结束", tone: "border-white/20 bg-white/5 text-white/50" }
+  if (product.value?.stock === 0) return { text: "已售罄", tone: "border-white/20 bg-white/5 text-white/50" }
   return { text: "抢购中", tone: "border-emerald-500/40 bg-emerald-500/15 text-emerald-200" }
+})
+
+const isEnded = computed(() => {
+  const endTime = product.value?.end_time
+  return !!(endTime && new Date(endTime) < new Date())
 })
 
 const formatDateTime = (dateStr?: string) => {
@@ -184,8 +194,10 @@ const formatDateTime = (dateStr?: string) => {
             <div class="mt-2 text-sm font-semibold text-white">{{ formatDateTime(product.start_time) }}</div>
           </div>
           <div class="rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80 p-4">
-            <p class="text-sm text-white/60">商品 ID</p>
-            <div class="mt-2 font-mono text-sm font-semibold text-white/80">#{{ product.id }}</div>
+            <p class="text-sm text-white/60">结束时间</p>
+            <div class="mt-2 text-sm font-semibold" :class="isEnded ? 'text-red-400' : 'text-white'">
+              {{ product.end_time ? formatDateTime(product.end_time) : '永不过期' }}
+            </div>
           </div>
         </div>
 
@@ -253,11 +265,12 @@ const formatDateTime = (dateStr?: string) => {
                   <MagmaButton
                     class="w-full justify-center"
                     :loading="status === 'loading'"
-                    :disabled="!isStarted || status === 'success'"
+                    :disabled="!isStarted || status === 'success' || isEnded"
                     :class="buttonClass"
                     @click="onSeckill"
                   >
-                    <span v-if="buttonState === 'pending'">即将开始 · {{ formatted }}</span>
+                    <span v-if="isEnded">活动已结束</span>
+                    <span v-else-if="buttonState === 'pending'">即将开始 · {{ formatted }}</span>
                     <span v-else-if="buttonState === 'loading'">锁定中...</span>
                     <span v-else-if="buttonState === 'success'">GOT 'EM · {{ resultMsg }}</span>
                     <span v-else-if="buttonState === 'failed'">再试一次 · {{ resultMsg }}</span>

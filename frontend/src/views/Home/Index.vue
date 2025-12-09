@@ -214,7 +214,8 @@ const loadMore = () => {
               </CardTitle>
               <CardDescription class="flex items-center justify-between text-white/70">
                 <span>库存 {{ safeProduct(raw).stock }}</span>
-                <CountdownPill :start-time="safeProduct(raw).start_time" />
+                <span v-if="safeProduct(raw).end_time && new Date(safeProduct(raw).end_time!) < new Date()" class="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs text-white/50">已结束</span>
+                <CountdownPill v-else :start-time="safeProduct(raw).start_time" />
               </CardDescription>
             </CardHeader>
             <CardContent>

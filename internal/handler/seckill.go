@@ -78,6 +78,9 @@ func (h *SeckillHandler) Seckill(c *gin.Context) {
 		case errors.Is(err, service.ErrSeckillNotStart):
 			metrics.IncSeckillResult("not_started")
 			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, err.Error())
+		case errors.Is(err, service.ErrSeckillEnded):
+			metrics.IncSeckillResult("ended")
+			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, err.Error())
 		case errors.Is(err, service.ErrProductNotFound):
 			appG.Error(http.StatusNotFound, e.ERROR_NOT_EXIST_PRODUCT)
 		case errors.Is(err, service.ErrSeckillBusy):

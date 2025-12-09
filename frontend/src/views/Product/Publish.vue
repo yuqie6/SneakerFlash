@@ -38,6 +38,7 @@ const form = reactive({
   price: "",
   stock: "",
   start_time: "",
+  end_time: "",
   image: "",
 })
 const editingId = ref<number | null>(null)
@@ -87,12 +88,27 @@ const submit = async () => {
 
   loading.submitting = true
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       name: form.name,
       price: Number(form.price),
       stock: Number(form.stock),
       start_time: parsedTime.toISOString(),
       image: form.image,
+    }
+    // 结束时间（可选）
+    if (form.end_time) {
+      const endParsed = new Date(form.end_time)
+      if (Number.isNaN(endParsed.getTime())) {
+        toast.error("结束时间不合法")
+        loading.submitting = false
+        return
+      }
+      if (endParsed <= parsedTime) {
+        toast.error("结束时间必须晚于开抢时间")
+        loading.submitting = false
+        return
+      }
+      payload.end_time = endParsed.toISOString()
     }
     if (editingId.value) {
       await api.put(`/products/${editingId.value}`, payload)
@@ -135,6 +151,7 @@ const startEdit = (p: any) => {
   form.price = String(p.price)
   form.stock = String(p.stock)
   form.start_time = p.start_time?.slice(0, 16) || ""
+  form.end_time = p.end_time?.slice(0, 16) || ""
   form.image = p.image || ""
 }
 
@@ -144,6 +161,7 @@ const resetForm = () => {
   form.price = ""
   form.stock = ""
   form.start_time = ""
+  form.end_time = ""
   form.image = ""
 }
 
@@ -319,6 +337,20 @@ const deleteProduct = async (id: number) => {
                     class="border-obsidian-border/60 bg-black/40 text-white placeholder:text-white/40 focus-visible:ring-magma"
                   />
                 </div>
+              </div>
+
+              <!-- 结束时间（可选） -->
+              <div class="space-y-2">
+                <label class="flex items-center gap-2 text-sm font-medium text-white/70">
+                  <Clock class="h-3.5 w-3.5 text-purple-400/70" />
+                  结束时间（可选）
+                </label>
+                <Input
+                  v-model="form.end_time"
+                  type="datetime-local"
+                  class="border-obsidian-border/60 bg-black/40 text-white placeholder:text-white/40 focus-visible:ring-magma"
+                />
+                <p class="text-xs text-white/40">不设置则表示活动永不过期</p>
               </div>
 
               <!-- 封面图 -->

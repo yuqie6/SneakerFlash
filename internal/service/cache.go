@@ -15,8 +15,8 @@ const pendingOrderTTL = 10 * time.Minute
 
 // 缓存 worker pool 配置
 const (
-	cacheWorkerCount   = 10    // worker 数量
-	cacheTaskChanSize  = 10000 // channel 缓冲大小
+	cacheWorkerCount  = 10    // worker 数量
+	cacheTaskChanSize = 10000 // channel 缓冲大小
 )
 
 var (
@@ -134,16 +134,6 @@ func getPendingOrder(ctx context.Context, orderNum string) (*PendingOrderCache, 
 		return nil, uErr
 	}
 	return &cache, nil
-}
-
-// markPendingOrderReady 更新缓存为 ready。
-func markPendingOrderReady(ctx context.Context, orderNum string, orderID uint, paymentID string) {
-	_ = setPendingOrder(ctx, PendingOrderCache{
-		OrderNum:  orderNum,
-		OrderID:   orderID,
-		PaymentID: paymentID,
-		Status:    PendingStatusReady,
-	})
 }
 
 // markPendingOrderFailed 标记处理失败，便于前端提示。

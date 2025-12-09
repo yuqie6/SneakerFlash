@@ -20,19 +20,21 @@ type ProductHandler struct {
 }
 
 type CreateProductReq struct {
-	Name      string  `json:"name" binding:"required"`
-	Price     float64 `json:"price" binding:"required,gt=0"`
-	Stock     int     `json:"stock" binding:"required,gt=0"`
-	StartTime string  `json:"start_time" binding:"required"`
-	Image     string  `json:"image"`
+	Name      string  `json:"name" binding:"required" example:"限量球鞋"`
+	Price     float64 `json:"price" binding:"required,gt=0" example:"999.00"`
+	Stock     int     `json:"stock" binding:"required,gt=0" example:"100"`
+	StartTime string  `json:"start_time" binding:"required" example:"2025-12-10 10:00:00"`
+	EndTime   string  `json:"end_time" example:"2025-12-10 12:00:00"` // 可选，结束时间，不设置则永不过期
+	Image     string  `json:"image" example:"https://example.com/shoe.jpg"`
 }
 
 type UpdateProductReq struct {
-	Name      *string  `json:"name" binding:"omitempty"`
-	Price     *float64 `json:"price" binding:"omitempty,gt=0"`
-	Stock     *int     `json:"stock" binding:"omitempty,gt=0"`
-	StartTime *string  `json:"start_time" binding:"omitempty"`
-	Image     *string  `json:"image"`
+	Name      *string  `json:"name" binding:"omitempty" example:"限量球鞋"`
+	Price     *float64 `json:"price" binding:"omitempty,gt=0" example:"999.00"`
+	Stock     *int     `json:"stock" binding:"omitempty,gt=0" example:"100"`
+	StartTime *string  `json:"start_time" binding:"omitempty" example:"2025-12-10 10:00:00"`
+	EndTime   *string  `json:"end_time" binding:"omitempty" example:"2025-12-10 12:00:00"` // 可选，结束时间，空字符串清除
+	Image     *string  `json:"image" example:"https://example.com/shoe.jpg"`
 }
 
 func NewProductHandler(svc *service.ProductService) *ProductHandler {
@@ -92,12 +94,28 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// 解析结束时间（可选）
+	var endTime *time.Time
+	if req.EndTime != "" {
+		et, err := parseStartTime(req.EndTime)
+		if err != nil {
+			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "结束时间格式不正确")
+			return
+		}
+		if !et.After(startTime) {
+			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "结束时间必须晚于开始时间")
+			return
+		}
+		endTime = &et
+	}
+
 	p := &model.Product{
 		UserID:    userID,
 		Name:      req.Name,
 		Price:     req.Price,
 		Stock:     req.Stock,
 		StartTime: startTime,
+		EndTime:   endTime,
 		Image:     req.Image,
 	}
 
@@ -234,6 +252,17 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	}
 	if req.Image != nil {
 		updates["image"] = *req.Image
+	}
+	if req.EndTime != nil {
+		if *req.EndTime == "" {
+			// 允许清空结束时间
+			updates["end_time"] = nil
+		} else if t, parseErr := parseStartTime(*req.EndTime); parseErr == nil {
+			updates["end_time"] = t
+		} else {
+			appG.ErrorMsg(http.StatusBadRequest, e.INVALID_PARAMS, "结束时间格式不正确")
+			return
+		}
 	}
 
 	if err := h.svc.UpdateProduct(ctx, userID, uint(id), updates); err != nil {

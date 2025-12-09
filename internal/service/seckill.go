@@ -59,6 +59,7 @@ var (
 	ErrSeckillFull     = errors.New("手慢无, 商品已经售罄")
 	ErrSeckillBusy     = errors.New("系统繁忙, 请稍后重试")
 	ErrSeckillNotStart = errors.New("活动尚未开始")
+	ErrSeckillEnded    = errors.New("活动已结束")
 )
 
 // SeckillResult 秒杀接口返回，前端据此轮询订单状态。
@@ -85,6 +86,9 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 	}
 	if time.Now().Before(product.StartTime) {
 		return nil, ErrSeckillNotStart
+	}
+	if product.EndTime != nil && time.Now().After(*product.EndTime) {
+		return nil, ErrSeckillEnded
 	}
 
 	// 1. 准备 redis key
