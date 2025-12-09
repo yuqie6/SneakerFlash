@@ -8,6 +8,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  server: {
+    host: "0.0.0.0",
+    proxy: {
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/uploads": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/metrics": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/swagger": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

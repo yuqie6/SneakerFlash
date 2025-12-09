@@ -2,7 +2,7 @@ import axios from "axios"
 import { toast } from "vue-sonner"
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
   timeout: 10000,
 })
 
@@ -103,18 +103,11 @@ export async function uploadImage(file: File) {
   return resolveAssetUrl(res.url)
 }
 
-const assetOrigin = (() => {
-  const base = api.defaults.baseURL || window.location.origin
-  try {
-    return new URL(base).origin
-  } catch {
-    return window.location.origin
-  }
-})()
-
 export function resolveAssetUrl(src: string | undefined | null) {
   if (!src) return ""
+  // 绝对URL或Data URI直接返回
   if (/^https?:\/\//i.test(src) || src.startsWith("data:")) return src
-  if (src.startsWith("/")) return `${assetOrigin}${src}`
-  return `${assetOrigin}/${src}`
+  // 相对路径直接返回（由Vite代理处理）
+  if (src.startsWith("/")) return src
+  return `/${src}`
 }
