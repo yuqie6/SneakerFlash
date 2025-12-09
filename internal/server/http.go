@@ -27,8 +27,8 @@ func NewHttpServer() *gin.Engine {
 	seckillServicer := service.NewSeckillService(db.DB, productRepo)
 	orderServicer := service.NewOrderService(db.DB, productRepo, userRepo)
 	uploadServicer := service.NewUploadService(config.Conf.Server.UploadDir)
-	vipServicer := service.NewVIPService(db.DB, userRepo)
 	couponServicer := service.NewCouponService(db.DB)
+	vipServicer := service.NewVIPService(db.DB, userRepo, couponServicer)
 
 	// handler 层
 	userHandler := handler.NewUserHandler(userServicer)

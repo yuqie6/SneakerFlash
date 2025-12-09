@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"SneakerFlash/internal/config"
+	vipcron "SneakerFlash/internal/cron"
 	"SneakerFlash/internal/db"
 	"SneakerFlash/internal/infra/kafka"
 	"SneakerFlash/internal/infra/redis"
@@ -29,6 +30,11 @@ func main() {
 	orderRepo := repository.NewOrderRepo(db.DB)
 
 	workerSvc := service.NewWorkerService(db.DB, productRepo, orderRepo)
+
+	// 启动 VIP 月度发券定时任务
+	vipCron := vipcron.NewVIPCouponCron(db.DB)
+	vipCron.Start()
+	defer vipCron.Stop()
 
 	// 使用批量消费模式，大幅提升 TPS
 	kafka.StartBatchConsumer(config.Conf.Data.Kafka, workerSvc.BatchCreateOrdersFromMessages)

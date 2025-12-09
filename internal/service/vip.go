@@ -38,13 +38,15 @@ type VIPService struct {
 	db          *gorm.DB
 	userRepo    *repository.UserRepo
 	paidVIPRepo *repository.PaidVIPRepo
+	couponSvc   *CouponService
 }
 
-func NewVIPService(db *gorm.DB, userRepo *repository.UserRepo) *VIPService {
+func NewVIPService(db *gorm.DB, userRepo *repository.UserRepo, couponSvc *CouponService) *VIPService {
 	return &VIPService{
 		db:          db,
 		userRepo:    userRepo,
 		paidVIPRepo: repository.NewPaidVIPRepo(db),
+		couponSvc:   couponSvc,
 	}
 }
 
@@ -88,6 +90,10 @@ func (s *VIPService) PurchasePaidVIP(ctx context.Context, userID uint, planID in
 	end := start.Add(time.Duration(plan.DurationDays) * 24 * time.Hour)
 	if err := s.paidVIPRepo.Upsert(ctx, userID, plan.Level, start, end); err != nil {
 		return nil, err
+	}
+	// 购买成功后立即发放当月 VIP 优惠券
+	if s.couponSvc != nil {
+		_ = s.couponSvc.IssueVIPMonthly(ctx, userID, plan.Level)
 	}
 	return s.Profile(ctx, userID)
 }

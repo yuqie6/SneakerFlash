@@ -38,3 +38,12 @@ func (r *PaidVIPRepo) Upsert(ctx context.Context, userID uint, level int, start,
 		Assign(pv).
 		FirstOrCreate(&pv).Error
 }
+
+// ListActivePaidVIPs 查询所有有效（未过期）的付费 VIP 记录。
+func (r *PaidVIPRepo) ListActivePaidVIPs(ctx context.Context, now time.Time) ([]model.PaidVIP, error) {
+	var pvs []model.PaidVIP
+	if err := r.db.WithContext(ctx).Where("expired_at > ?", now).Find(&pvs).Error; err != nil {
+		return nil, err
+	}
+	return pvs, nil
+}

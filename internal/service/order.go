@@ -397,6 +397,9 @@ func (s *OrderService) HandlePaymentResult(ctx context.Context, paymentID string
 			if uErr := txUserRepo.UpdateGrowth(ctx, order.UserID, newTotal, newLevel); uErr != nil {
 				return uErr
 			}
+			// 成长等级提升后发放月度优惠券
+			couponSvc := NewCouponService(tx)
+			_ = couponSvc.IssueVIPMonthly(ctx, order.UserID, newLevel)
 		} else {
 			// 支付失败/退款则释放已占用的优惠券，避免用户券被锁死
 			if releaseErr := txUserCouponRepo.ReleaseByOrder(ctx, order.ID); releaseErr != nil {

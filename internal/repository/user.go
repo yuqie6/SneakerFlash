@@ -78,3 +78,12 @@ func (r *UserRepo) UpdateGrowth(ctx context.Context, userID uint, totalSpentCent
 	}
 	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }
+
+// ListAllWithGrowthLevel 查询所有成长等级 >= minLevel 的用户（用于月度发券定时任务）。
+func (r *UserRepo) ListAllWithGrowthLevel(ctx context.Context, minLevel int) ([]model.User, error) {
+	var users []model.User
+	if err := r.db.WithContext(ctx).Where("growth_level >= ?", minLevel).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
+}
