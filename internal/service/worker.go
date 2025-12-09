@@ -47,9 +47,10 @@ func rollbackRedisStock(ctx context.Context, productID, userID uint) {
 // ========== 批量插入实现 ==========
 
 // BatchCreateOrdersFromMessages 批量处理秒杀消息：解析 -> 幂等过滤 -> 批量扣库存 -> 批量插入订单/支付单
-func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) error {
+// 返回处理失败的消息索引列表，用于 Consumer 的重试/DLQ 机制
+func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (failedIndexes []int, err error) {
 	if len(msgBodies) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	ctx := logger.ContextWithValues(context.Background(), "batch_size", len(msgBodies))
@@ -67,14 +68,14 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) error 
 	}
 
 	if len(msgs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// 记录处理结果
 	results := make([]orderResult, 0, len(msgs))
 
 	// 2. 开启数据库事务
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	txErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		txOrderRepo := repository.NewOrderRepo(tx)
 		txPaymentRepo := repository.NewPaymentRepo(tx)
 		txProductRepo := repository.NewProductRepo(tx)
@@ -238,14 +239,19 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) error 
 	})
 
 	// 3. 处理事务结果
-	if err != nil {
-		slog.ErrorContext(ctx, "批量事务失败", slog.Any("error", err))
-		// 事务失败，回滚所有 Redis 库存
+	if txErr != nil {
+		slog.ErrorContext(ctx, "批量事务失败", slog.Any("error", txErr))
+		// 事务失败，回滚所有 Redis 库存，返回所有消息索引作为失败
 		for _, msg := range msgs {
 			rollbackRedisStock(ctx, msg.ProductID, msg.UserID)
-			markPendingOrderFailed(ctx, msg.OrderNum, err.Error())
+			markPendingOrderFailed(ctx, msg.OrderNum, txErr.Error())
 		}
-		return err
+		// 返回所有消息的索引作为失败
+		allIndexes := make([]int, len(msgBodies))
+		for i := range allIndexes {
+			allIndexes[i] = i
+		}
+		return allIndexes, txErr
 	}
 
 	// 4. 批量更新 Redis pending 状态
@@ -258,7 +264,15 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) error 
 		slog.Duration("elapsed", elapsed),
 	)
 
-	return nil
+	// 收集失败的消息索引
+	var failed []int
+	for i, r := range results {
+		if !r.success {
+			failed = append(failed, i)
+		}
+	}
+
+	return failed, nil
 }
 
 // batchUpdatePendingStatus 使用 Pipeline 批量更新 Redis pending 状态

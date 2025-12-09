@@ -4,12 +4,14 @@ import (
 	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/infra/kafka"
 	"SneakerFlash/internal/infra/redis"
+	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/repository"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
 
@@ -41,16 +43,18 @@ var seckillScript = _redis.NewScript(`
 	return 1
 `)
 
-// SeckillService 秒杀服务，负责 Redis 原子扣减 + Kafka 投递。
+// SeckillService 秒杀服务，负责 Redis 原子扣减 + Outbox 投递。
 type SeckillService struct {
 	db          *gorm.DB
 	productRepo *repository.ProductRepo
+	outboxRepo  *repository.OutboxRepo
 }
 
 func NewSeckillService(db *gorm.DB, productRepo *repository.ProductRepo) *SeckillService {
 	return &SeckillService{
 		db:          db,
 		productRepo: productRepo,
+		outboxRepo:  repository.NewOutboxRepo(db),
 	}
 }
 
@@ -70,7 +74,8 @@ type SeckillResult struct {
 	Status    string `json:"status"` // pending/ready/failed
 }
 
-// Seckill 秒杀扣减库存并投递消息，由 worker 落库；Redis 原子扣减保护库存，投递失败回滚库存。
+// Seckill 秒杀扣减库存并投递消息，由 worker 落库；Redis 原子扣减保护库存。
+// 使用 Outbox 模式：先写本地消息表，再异步发送 Kafka，保证消息最终一致性。
 func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*SeckillResult, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
@@ -112,14 +117,21 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 	// 4. 抢到了, 生成订单号/支付号，准备消息
 	orderNum, err := utils.GenSnowflakeID()
 	if err != nil {
+		// 回滚 Redis
+		redis.RDB.Incr(ctx, stockKey)
+		redis.RDB.SRem(ctx, userSetKey, userID)
 		return nil, ErrSeckillBusy
 	}
 	paymentID, err := utils.GenSnowflakeID()
 	if err != nil {
+		redis.RDB.Incr(ctx, stockKey)
+		redis.RDB.SRem(ctx, userSetKey, userID)
 		return nil, ErrSeckillBusy
 	}
 	priceCents := int64(math.Round(product.Price * 100))
 	if priceCents <= 0 {
+		redis.RDB.Incr(ctx, stockKey)
+		redis.RDB.SRem(ctx, userSetKey, userID)
 		return nil, ErrSeckillBusy
 	}
 
@@ -133,14 +145,26 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 	}
 
 	msgBytes, _ := json.Marshal(msg)
-	if err := kafka.Send(config.Conf.Data.Kafka.Topic, string(msgBytes)); err != nil {
-		// 投递失败回滚 Redis 库存/用户标记，避免锁死
+	topic := config.Conf.Data.Kafka.Topic
+
+	// 5. 写入本地消息表（Outbox Pattern）
+	outboxMsg := &model.OutboxMessage{
+		Topic:   topic,
+		Payload: string(msgBytes),
+		Status:  model.OutboxStatusPending,
+	}
+	if err := s.outboxRepo.Create(ctx, outboxMsg); err != nil {
+		slog.ErrorContext(ctx, "写入 Outbox 失败", slog.Any("error", err))
+		// 回滚 Redis 库存/用户标记
 		redis.RDB.Incr(ctx, stockKey)
 		redis.RDB.SRem(ctx, userSetKey, userID)
 		return nil, ErrSeckillBusy
 	}
 
-	// 预写 pending 状态，便于前端轮询
+	// 6. 异步发送 Kafka（非阻塞，失败由补偿任务处理）
+	go s.sendOutboxMessage(outboxMsg)
+
+	// 7. 预写 pending 状态，便于前端轮询
 	_ = setPendingOrder(ctx, PendingOrderCache{
 		OrderNum:   orderNum,
 		PaymentID:  paymentID,
@@ -158,4 +182,17 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 		PaymentID: paymentID,
 		Status:    string(PendingStatusPending),
 	}, nil
+}
+
+// sendOutboxMessage 异步发送 Outbox 消息到 Kafka
+func (s *SeckillService) sendOutboxMessage(msg *model.OutboxMessage) {
+	ctx := context.Background()
+	if err := kafka.Send(msg.Topic, msg.Payload); err != nil {
+		slog.Warn("Kafka 发送失败，等待补偿任务处理", slog.Uint64("msg_id", uint64(msg.ID)), slog.Any("error", err))
+		return
+	}
+	// 发送成功，标记为已发送
+	if err := s.outboxRepo.MarkSent(ctx, msg.ID); err != nil {
+		slog.Error("标记 Outbox 消息发送成功失败", slog.Uint64("msg_id", uint64(msg.ID)), slog.Any("error", err))
+	}
 }

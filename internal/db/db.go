@@ -102,6 +102,7 @@ func MakeMigrate() {
 		&model.Coupon{},
 		&model.UserCoupon{},
 		&model.PaidVIP{},
+		&model.OutboxMessage{},
 	)
 
 	if err != nil {
