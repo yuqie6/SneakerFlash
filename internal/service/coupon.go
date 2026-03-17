@@ -39,9 +39,9 @@ func NewCouponService(db *gorm.DB) *CouponService {
 
 // MyCoupon 用户券视图，合并券模板与用户持有信息。
 type MyCoupon struct {
-	ID            uint               `json:"id"`              // 用户券 ID
-	CouponID      uint               `json:"coupon_id"`       // 券模板 ID
-	Type          model.CouponType   `json:"type"`            // full_cut/discount
+	ID            uint               `json:"id"`        // 用户券 ID
+	CouponID      uint               `json:"coupon_id"` // 券模板 ID
+	Type          model.CouponType   `json:"type"`      // full_cut/discount
 	Title         string             `json:"title"`
 	Description   string             `json:"description"`
 	AmountCents   int64              `json:"amount_cents"`    // 满减金额（分）
@@ -72,10 +72,10 @@ type vipCouponTemplate struct {
 
 // vipTemplates 各等级 VIP 月度券规格
 var vipTemplates = map[int]vipCouponTemplate{
-	1: {Title: "VIP L1 月度券", Type: model.CouponTypeFullCut, AmountCents: 500, MinSpendCents: 3000},   // 满30减5
-	2: {Title: "VIP L2 月度券", Type: model.CouponTypeFullCut, AmountCents: 1000, MinSpendCents: 5000},  // 满50减10
-	3: {Title: "VIP L3 月度券", Type: model.CouponTypeDiscount, DiscountRate: 90, MinSpendCents: 0},     // 九折
-	4: {Title: "VIP L4 月度券", Type: model.CouponTypeDiscount, DiscountRate: 85, MinSpendCents: 0},     // 八五折
+	1: {Title: "VIP L1 月度券", Type: model.CouponTypeFullCut, AmountCents: 500, MinSpendCents: 3000},  // 满30减5
+	2: {Title: "VIP L2 月度券", Type: model.CouponTypeFullCut, AmountCents: 1000, MinSpendCents: 5000}, // 满50减10
+	3: {Title: "VIP L3 月度券", Type: model.CouponTypeDiscount, DiscountRate: 90, MinSpendCents: 0},    // 九折
+	4: {Title: "VIP L4 月度券", Type: model.CouponTypeDiscount, DiscountRate: 85, MinSpendCents: 0},    // 八五折
 }
 
 // ApplyCoupon 校验并计算优惠后的金额，返回优惠后金额和需要核销的用户券记录。
@@ -117,7 +117,7 @@ func (s *CouponService) ApplyCoupon(ctx context.Context, userID uint, userCoupon
 	}
 
 	// 计算优惠后金额
-	newAmount := originAmount
+	var newAmount int64
 	switch c.Type {
 	case model.CouponTypeFullCut:
 		newAmount = originAmount - c.AmountCents

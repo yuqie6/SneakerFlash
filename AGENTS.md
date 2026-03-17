@@ -3,7 +3,7 @@
 ## 项目概览
 - 后端：Go（Gin + GORM + Redis + Kafka + Viper），入口 `cmd/api`（HTTP）与 `cmd/worker`（Kafka 消费），业务与基础设施在 `internal/` 分层。
 - 前端：Vue 3 + TypeScript + Vite + Tailwind，Pinia + Vue Router，动效 Lenis/Motion-v，UI 组件位于 `frontend/src/components/ui` 与 `components/motion`，入口 `frontend/src/main.ts`。
-- 文档：接口 `docs/backend-api.md`、前端方案 `docs/frontend-plan.md`、阶段路线 `docs/plan.md`、压测指南 `docs/perf.md`，Swagger 产物在 `docs/swagger.*`。
+- 文档：总入口 `README.md`、文档中心 `docs/README.md`、接口 `docs/backend-api.md`、前端方案 `docs/frontend-plan.md`、开发指南 `docs/development.md`、配置说明 `docs/configuration.md`、运维手册 `docs/operations.md`、排障手册 `docs/troubleshooting.md`、阶段路线 `docs/plan.md`，Swagger 产物在 `docs/swagger.*`。
 - 压测/工具：`perf/k6-seckill.js`、`perf/export_tokens.go`；静态上传目录 `uploads/`（git 忽略）。
 
 ## 运行与配置
@@ -43,8 +43,14 @@
 
 ## 测试与验证
 - 当前无自动化测试，改动核心逻辑（库存扣减、订单、限流、支付回调等）请补 Go 表驱动用例并确保 `go test ./...` 通过。
+- Go 代码检查统一使用根目录 `.golangci.yml`；后端改动完成后至少执行 `golangci-lint run ./...`，优先修复本次改动直接引入的问题。
 - 前端如新增复杂交互可引入/补充 Vitest + vue-test-utils（目前未配置），至少保证 `npm run build`/`vue-tsc -b` 通过。
 - 压测需参考 `docs/perf.md` 与 `perf/` 脚本，必要时关闭/调低限流再跑 k6。
+
+## 文档约束
+- `README.md` 是项目总入口，`docs/README.md` 是文档目录入口；新增能力、运行方式、配置项、接口契约变化时必须同步更新对应文档。
+- 后端接口变更至少同步 `docs/backend-api.md` 或 `docs/swagger.*`；前端结构或交互方案调整时同步 `docs/frontend-plan.md`。
+- 运维、排障、依赖启动方式变更时补充到运维类文档，避免关键信息只留在对话或提交记录里。
 
 ## 提交与安全
 - Commit 信息用简洁中文动词短语，一次聚焦单主题；涉及接口/交互变更同步 `docs/backend-api.md` 或在 PR 说明，对照 `docs/frontend-plan.md`。

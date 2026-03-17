@@ -1,0 +1,19 @@
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gofmt
+    - goimports
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unused
+
+issues:
+  exclude-files:
+    - docs/docs.go
+

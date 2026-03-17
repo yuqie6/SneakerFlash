@@ -88,7 +88,7 @@ func (s *ProductService) GetProductByID(ctx context.Context, id uint) (*model.Pr
 		}
 
 		var p model.Product
-		if json.Unmarshal([]byte(val), &p) == nil {
+		if err := json.Unmarshal([]byte(val), &p); err == nil {
 			return &p, nil
 		}
 	}
@@ -102,8 +102,9 @@ func (s *ProductService) GetProductByID(ctx context.Context, id uint) (*model.Pr
 				return nil, ErrProductNotFound
 			}
 			var p model.Product
-			json.Unmarshal([]byte(val), &p)
-			return &p, nil
+			if err := json.Unmarshal([]byte(val), &p); err == nil {
+				return &p, nil
+			}
 		}
 
 		// 查数据库
@@ -121,10 +122,10 @@ func (s *ProductService) GetProductByID(ctx context.Context, id uint) (*model.Pr
 
 		// 将数据库的数据写回 redis
 		// 我们要处理缓存雪崩, 最普遍的方法是设置随机过期时间
-		expriation := time.Hour + time.Duration(rand.Intn(1800)*int(time.Second))
+		expiration := time.Hour + time.Duration(rand.Intn(1800)*int(time.Second))
 
 		data, _ := json.Marshal(p)
-		redis.RDB.Set(ctx, cacheKey, data, expriation)
+		redis.RDB.Set(ctx, cacheKey, data, expiration)
 		return p, nil
 	})
 

@@ -29,7 +29,7 @@ func Init(cfg config.DatabaseConfig) {
 		cfg.DBname)
 
 	// 配置日志模式
-	logLevel := gormlogger.Error
+	var logLevel gormlogger.LogLevel
 	switch cfg.LogLever {
 	case 1:
 		logLevel = gormlogger.Silent
