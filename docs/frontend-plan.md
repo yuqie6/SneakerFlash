@@ -42,7 +42,7 @@ src/
 - `/orders`、`/orders/:id`：订单列表与订单详情
 - `/profile`：个人资料
 - `/vip`：VIP 中心与优惠券入口
-- `/admin` 及其子路由：统计、用户、订单、优惠券、商品、风控
+- `/admin` 及其子路由：统计、用户、订单、优惠券、商品、风控、审计日志
 
 ## 视觉与交互约束
 - 主题色以 `#F9F8F6`、`#FFFFFF`、`#1C1C1C` 为主
@@ -62,7 +62,7 @@ src/
 - `localStorage.refresh_token`
 
 ### Store 约定
-- `userStore`：登录态、用户资料、管理员判定
+- `userStore`：登录态、用户资料、管理员判定、资源级权限判定
 - `productStore`：商品列表/详情缓存与刷新
 - 新增 store 时保持同样模式，不直接在视图层散落请求与缓存逻辑
 
@@ -72,6 +72,7 @@ src/
 - 商品：`/products`、`/product/:id`、`/products/mine`
 - 秒杀：`/seckill`
 - 订单：`/orders`、`/orders/:id`、`/orders/poll/:order_num`、`/orders/:id/apply-coupon`
+- 实时推送：`/stream/orders/:id`、`/stream/products/:id`
 - 支付：`/payment/callback`
 - VIP：`/vip/profile`、`/vip/purchase`
 - 优惠券：`/coupons/mine`、`/coupons/purchase`
@@ -80,9 +81,10 @@ src/
 ## 已实现的关键体验
 - 未登录访问受保护页面会跳转登录页
 - 秒杀成功后支持轮询订单状态
-- 订单详情支持支付态查看与优惠券应用
+- 订单详情支持支付态查看、优惠券应用，以及基于 SSE 的订单状态/库存同步；SSE 失败时回退到轮询
 - 用户中心可查看 VIP 信息
-- 管理后台已支持基础运营数据与风控名单维护
+- 管理后台已支持资源级权限裁剪；菜单和路由会按 `/profile.permissions` 收敛
+- 管理后台已支持基础运营数据、风控名单维护与审计日志查询
 
 ## 测试与构建
 - 开发：`pnpm dev`
@@ -91,5 +93,5 @@ src/
 - E2E：`pnpm test:e2e`
 
 ## 后续前端工作建议
-1. 若继续推进 P2，优先补“未支付自动取消”与“实时推送”对应的前端状态同步。
-2. 管理后台若引入细粒度 RBAC，需要同步补路由权限模型和页面级能力裁剪。
+1. 若继续推进 P2，可补更多管理后台页面级组件测试，覆盖权限裁剪后的不同角色视图。
+2. 若未来把 SSE 扩展到更多场景，仍建议保留现有轮询兜底，不把推送当成唯一事实源。

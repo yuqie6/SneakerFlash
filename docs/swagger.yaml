@@ -301,17 +301,58 @@ definitions:
     type: object
   handler.UserResponse:
     properties:
-      CreatedAt:
-        type: string
-      ID:
-        type: integer
-      UpdatedAt:
-        type: string
       avatar:
         type: string
       balance:
         type: number
+      created_at:
+        type: string
+      growth_level:
+        type: integer
+      id:
+        type: integer
+      permissions:
+        items:
+          type: string
+        type: array
+      role:
+        type: string
+      total_spent_cents:
+        type: integer
+      updated_at:
+        type: string
       username:
+        type: string
+    type: object
+  model.AuditLog:
+    properties:
+      action:
+        type: string
+      actor_id:
+        type: integer
+      actor_name:
+        type: string
+      actor_role:
+        type: string
+      created_at:
+        type: string
+      error_message:
+        type: string
+      id:
+        type: integer
+      request_body:
+        type: string
+      request_ip:
+        type: string
+      request_id:
+        type: string
+      request_path:
+        type: string
+      resource:
+        type: string
+      resource_id:
+        type: string
+      result:
         type: string
     type: object
   handler.adminCouponCreateReq:
@@ -785,7 +826,7 @@ paths:
         in: query
         name: page_size
         type: integer
-      - description: 订单状态：0未支付 1已支付 2失败
+      - description: 订单状态：0未支付 1已支付 2失败 3已取消
         in: query
         name: status
         type: integer
@@ -816,6 +857,60 @@ paths:
       security:
       - BearerAuth: []
       summary: 管理台订单列表
+      tags:
+      - 管理后台
+  /admin/audit:
+    get:
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      - description: 操作者用户名
+        in: query
+        name: actor_name
+        type: string
+      - description: 资源类型
+        in: query
+        name: resource
+        type: string
+      - description: 动作
+        in: query
+        name: action
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/app.PageData'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/app.Response'
+        "401":
+          description: 未登录
+          schema:
+            $ref: '#/definitions/app.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/app.Response'
+      security:
+      - BearerAuth: []
+      summary: 审计日志列表
       tags:
       - 管理后台
   /admin/products:
@@ -1267,7 +1362,7 @@ paths:
         in: query
         name: page_size
         type: integer
-      - description: 订单状态：0未支付 1已支付 2失败
+      - description: 订单状态：0未支付 1已支付 2失败 3已取消
         in: query
         name: status
         type: integer
@@ -1296,6 +1391,58 @@ paths:
       summary: 查询订单列表
       tags:
       - 订单
+  /stream/orders/{id}:
+    get:
+      parameters:
+      - description: 订单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: access token
+        in: query
+        name: access_token
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream established
+        "401":
+          description: 未登录
+          schema:
+            $ref: '#/definitions/app.Response'
+      security:
+      - BearerAuth: []
+      summary: 订阅订单状态推送
+      tags:
+      - 推送
+  /stream/products/{id}:
+    get:
+      parameters:
+      - description: 商品ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: access token
+        in: query
+        name: access_token
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream established
+        "401":
+          description: 未登录
+          schema:
+            $ref: '#/definitions/app.Response'
+      security:
+      - BearerAuth: []
+      summary: 订阅商品库存推送
+      tags:
+      - 推送
   /orders/{id}:
     get:
       parameters:

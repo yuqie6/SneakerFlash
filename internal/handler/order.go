@@ -48,7 +48,7 @@ func NewOrderHandler(orderSvc *service.OrderService) *OrderHandler {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Param status query int false "订单状态：0未支付 1已支付 2失败"
+// @Param status query int false "订单状态：0未支付 1已支付 2失败 3已取消"
 // @Success 200 {object} app.Response{data=OrderListResponse}
 // @Failure 400 {object} app.Response "参数错误"
 // @Failure 401 {object} app.Response "未登录"

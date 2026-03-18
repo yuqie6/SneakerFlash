@@ -1,6 +1,7 @@
 package service
 
 import (
+	"SneakerFlash/internal/infra/redis"
 	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/pkg/vip"
@@ -9,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -18,6 +20,7 @@ var (
 	ErrPaymentNotFound      = errors.New("支付单不存在")
 	ErrUnsupportedPayStatus = errors.New("不支持的支付状态")
 	ErrOrderNotPayable      = errors.New("订单状态不可支付")
+	errOrderAlreadySettled  = errors.New("订单已进入终态")
 )
 
 // OrderService 订单服务，处理订单查询、优惠券核销、支付回调。
@@ -190,6 +193,9 @@ func (s *OrderService) ApplyCoupon(ctx context.Context, userID, orderID uint, co
 func (s *OrderService) ListOrders(ctx context.Context, userID uint, status *model.OrderStatus, page, pageSize int) ([]model.Order, int64, error) {
 	if ctx == nil {
 		return nil, 0, fmt.Errorf("context is nil")
+	}
+	if status != nil && !model.ValidOrderStatus(*status) {
+		return nil, 0, fmt.Errorf("invalid order status: %d", *status)
 	}
 	return s.orderRepo.ListByUserID(ctx, userID, status, page, pageSize)
 }
@@ -416,5 +422,136 @@ func (s *OrderService) HandlePaymentResult(ctx context.Context, paymentID string
 	if err != nil {
 		return nil, err
 	}
+	if result.Order != nil && result.Payment != nil {
+		publishOrderEvent(result.Order.UserID, result.Order.ID, result.Order.Status, result.Payment.Status)
+	}
 	return &result, nil
+}
+
+func (s *OrderService) CancelExpiredOrders(ctx context.Context, ttl time.Duration, batchSize int) (int, error) {
+	if ctx == nil {
+		return 0, fmt.Errorf("context is nil")
+	}
+	if ttl <= 0 {
+		ttl = 15 * time.Minute
+	}
+	if batchSize <= 0 {
+		batchSize = 100
+	}
+
+	staleOrders, err := s.orderRepo.ListStaleUnpaid(ctx, time.Now().Add(-ttl), batchSize)
+	if err != nil {
+		return 0, err
+	}
+
+	cancelled := 0
+	for _, order := range staleOrders {
+		ok, cancelErr := s.cancelOrder(ctx, order.OrderNum, "auto_cancel_timeout")
+		if cancelErr != nil {
+			return cancelled, cancelErr
+		}
+		if ok {
+			cancelled++
+		}
+	}
+	return cancelled, nil
+}
+
+func (s *OrderService) cancelOrder(ctx context.Context, orderNum, notifyData string) (bool, error) {
+	type cancelSnapshot struct {
+		orderID       uint
+		userID        uint
+		productID     uint
+		productStock  int
+		paymentStatus model.PaymentStatus
+	}
+
+	var snapshot cancelSnapshot
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		txOrderRepo := repository.NewOrderRepo(tx)
+		txPaymentRepo := repository.NewPaymentRepo(tx)
+		txProductRepo := repository.NewProductRepo(tx)
+		txUserCouponRepo := repository.NewUserCouponRepo(tx)
+
+		order, err := txOrderRepo.GetByOrderNumForUpdate(ctx, orderNum)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+		if order.Status != model.OrderStatusUnpaid {
+			return nil
+		}
+
+		rows, err := txOrderRepo.UpdateStatusIfMatch(ctx, order.ID, model.OrderStatusUnpaid, model.OrderStatusCancelled)
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return nil
+		}
+
+		paymentRows, err := txPaymentRepo.UpdateStatusByOrderIDIfMatch(ctx, order.ID, model.PaymentStatusPending, model.PaymentStatusFailed, notifyData)
+		if err != nil {
+			return err
+		}
+		if paymentRows == 0 {
+			payment, payErr := txPaymentRepo.GetByOrderIDForUpdate(ctx, order.ID)
+			if payErr != nil && !errors.Is(payErr, gorm.ErrRecordNotFound) {
+				return payErr
+			}
+			if payment != nil && payment.Status != model.PaymentStatusPending {
+				return errOrderAlreadySettled
+			}
+		}
+		payment, err := txPaymentRepo.GetByOrderID(ctx, order.ID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		if err := txUserCouponRepo.ReleaseByOrder(ctx, order.ID); err != nil {
+			return err
+		}
+		if _, err := txProductRepo.IncreaseStockDB(ctx, order.ProductID, 1); err != nil {
+			return err
+		}
+		product, err := txProductRepo.GetByID(ctx, order.ProductID)
+		if err != nil {
+			return err
+		}
+
+		snapshot.orderID = order.ID
+		snapshot.userID = order.UserID
+		snapshot.productID = order.ProductID
+		snapshot.productStock = product.Stock
+		if payment != nil {
+			snapshot.paymentStatus = payment.Status
+		}
+		return nil
+	})
+	if errors.Is(err, errOrderAlreadySettled) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if snapshot.orderID == 0 {
+		return false, nil
+	}
+
+	stockKey := fmt.Sprintf("product:stock:%d", snapshot.productID)
+	userSetKey := fmt.Sprintf("product:users:%d", snapshot.productID)
+	_ = redis.RDB.Incr(ctx, stockKey).Err()
+	_ = redis.RDB.SRem(ctx, userSetKey, snapshot.userID).Err()
+	_ = setPendingOrder(ctx, PendingOrderCache{
+		OrderNum: orderNum,
+		OrderID:  snapshot.orderID,
+		Status:   PendingStatusFailed,
+		Message:  "订单已超时取消",
+	})
+	refreshStockCacheAsync(snapshot.productID, snapshot.productStock)
+	invalidateProductInfoCache(snapshot.productID)
+	publishOrderEvent(snapshot.userID, snapshot.orderID, model.OrderStatusCancelled, snapshot.paymentStatus)
+	return true, nil
 }

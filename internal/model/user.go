@@ -3,9 +3,65 @@ package model
 import "gorm.io/gorm"
 
 const (
-	UserRoleUser  = "user"
-	UserRoleAdmin = "admin"
+	UserRoleUser        = "user"
+	UserRoleAdmin       = "admin"
+	UserRoleSuperAdmin  = "super_admin"
+	UserRoleOpsAdmin    = "ops_admin"
+	UserRoleRiskAdmin   = "risk_admin"
+	UserRoleCouponAdmin = "coupon_admin"
+	UserRoleAuditAdmin  = "audit_admin"
 )
+
+const (
+	AdminResourceStats    = "stats"
+	AdminResourceUsers    = "users"
+	AdminResourceOrders   = "orders"
+	AdminResourceProducts = "products"
+	AdminResourceCoupons  = "coupons"
+	AdminResourceRisk     = "risk"
+	AdminResourceAudit    = "audit"
+)
+
+var adminRolePermissions = map[string][]string{
+	UserRoleAdmin: {
+		AdminResourceStats,
+		AdminResourceUsers,
+		AdminResourceOrders,
+		AdminResourceProducts,
+		AdminResourceCoupons,
+		AdminResourceRisk,
+		AdminResourceAudit,
+	},
+	UserRoleSuperAdmin: {
+		AdminResourceStats,
+		AdminResourceUsers,
+		AdminResourceOrders,
+		AdminResourceProducts,
+		AdminResourceCoupons,
+		AdminResourceRisk,
+		AdminResourceAudit,
+	},
+	UserRoleOpsAdmin: {
+		AdminResourceStats,
+		AdminResourceUsers,
+		AdminResourceOrders,
+		AdminResourceProducts,
+	},
+	UserRoleRiskAdmin: {
+		AdminResourceStats,
+		AdminResourceRisk,
+		AdminResourceAudit,
+	},
+	UserRoleCouponAdmin: {
+		AdminResourceStats,
+		AdminResourceCoupons,
+		AdminResourceAudit,
+	},
+	UserRoleAuditAdmin: {
+		AdminResourceStats,
+		AdminResourceAudit,
+	},
+}
 
 type User struct {
 	gorm.Model
@@ -20,4 +76,36 @@ type User struct {
 
 func (User) TableName() string {
 	return "users"
+}
+
+func IsAdminRole(role string) bool {
+	_, ok := adminRolePermissions[NormalizeUserRole(role)]
+	return ok
+}
+
+func NormalizeUserRole(role string) string {
+	if role == "" {
+		return UserRoleUser
+	}
+	return role
+}
+
+func PermissionsForRole(role string) []string {
+	normalized := NormalizeUserRole(role)
+	permissions, ok := adminRolePermissions[normalized]
+	if !ok {
+		return nil
+	}
+	cp := make([]string, len(permissions))
+	copy(cp, permissions)
+	return cp
+}
+
+func HasAdminResource(role, resource string) bool {
+	for _, permission := range PermissionsForRole(role) {
+		if permission == resource {
+			return true
+		}
+	}
+	return false
 }

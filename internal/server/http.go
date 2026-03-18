@@ -6,6 +6,7 @@ import (
 	"SneakerFlash/internal/handler"
 	"SneakerFlash/internal/infra/redis"
 	"SneakerFlash/internal/middlerware"
+	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/repository"
 	"SneakerFlash/internal/service"
 	"net/http"
@@ -32,6 +33,8 @@ func NewHttpServer() *gin.Engine {
 	healthServicer := service.NewHealthService()
 	riskServicer := service.NewRiskService(redis.RDB)
 	adminServicer := service.NewAdminService(db.DB, userRepo, productRepo)
+	auditServicer := service.NewAuditService(db.DB)
+	streamServicer := service.NewStreamService()
 
 	// handler 层
 	userHandler := handler.NewUserHandler(userServicer)
@@ -42,7 +45,8 @@ func NewHttpServer() *gin.Engine {
 	vipHandler := handler.NewVIPHandler(vipServicer)
 	couponHandler := handler.NewCouponHandler(couponServicer)
 	healthHandler := handler.NewHealthHandler(healthServicer)
-	adminHandler := handler.NewAdminHandler(adminServicer, riskServicer, couponServicer)
+	adminHandler := handler.NewAdminHandler(adminServicer, riskServicer, couponServicer, auditServicer)
+	streamHandler := handler.NewStreamHandler(streamServicer)
 
 	// 注册路由
 	r := gin.New()
@@ -127,25 +131,28 @@ func NewHttpServer() *gin.Engine {
 		auth.GET("/orders/:id", orderHandler.GetOrder)
 		auth.GET("/orders/poll/:order_num", orderHandler.PollOrder)
 		auth.POST("/orders/:id/apply-coupon", orderHandler.ApplyCoupon)
+		auth.GET("/stream/orders/:id", streamHandler.OrderEvents)
+		auth.GET("/stream/products/:id", streamHandler.ProductEvents)
 	}
 
 	admin := api.Group("/admin")
 	admin.Use(middlerware.JWTauth(), middlerware.AdminAuth())
 	{
-		admin.GET("/stats", adminHandler.Stats)
-		admin.GET("/users", adminHandler.ListUsers)
-		admin.GET("/orders", adminHandler.ListOrders)
-		admin.GET("/coupons", adminHandler.ListCoupons)
-		admin.POST("/coupons", adminHandler.CreateCoupon)
-		admin.PUT("/coupons/:id", adminHandler.UpdateCoupon)
-		admin.DELETE("/coupons/:id", adminHandler.DeleteCoupon)
-		admin.GET("/products", adminHandler.ListProducts)
-		admin.GET("/risk/blacklist", adminHandler.ListBlacklist)
-		admin.POST("/risk/blacklist", adminHandler.AddBlacklist)
-		admin.DELETE("/risk/blacklist", adminHandler.RemoveBlacklist)
-		admin.GET("/risk/graylist", adminHandler.ListGraylist)
-		admin.POST("/risk/graylist", adminHandler.AddGraylist)
-		admin.DELETE("/risk/graylist", adminHandler.RemoveGraylist)
+		admin.GET("/stats", middlerware.AdminResourceAuth(model.AdminResourceStats), adminHandler.Stats)
+		admin.GET("/users", middlerware.AdminResourceAuth(model.AdminResourceUsers), adminHandler.ListUsers)
+		admin.GET("/orders", middlerware.AdminResourceAuth(model.AdminResourceOrders), adminHandler.ListOrders)
+		admin.GET("/coupons", middlerware.AdminResourceAuth(model.AdminResourceCoupons), adminHandler.ListCoupons)
+		admin.POST("/coupons", middlerware.AdminResourceAuth(model.AdminResourceCoupons), adminHandler.CreateCoupon)
+		admin.PUT("/coupons/:id", middlerware.AdminResourceAuth(model.AdminResourceCoupons), adminHandler.UpdateCoupon)
+		admin.DELETE("/coupons/:id", middlerware.AdminResourceAuth(model.AdminResourceCoupons), adminHandler.DeleteCoupon)
+		admin.GET("/products", middlerware.AdminResourceAuth(model.AdminResourceProducts), adminHandler.ListProducts)
+		admin.GET("/risk/blacklist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.ListBlacklist)
+		admin.POST("/risk/blacklist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.AddBlacklist)
+		admin.DELETE("/risk/blacklist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.RemoveBlacklist)
+		admin.GET("/risk/graylist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.ListGraylist)
+		admin.POST("/risk/graylist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.AddGraylist)
+		admin.DELETE("/risk/graylist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.RemoveGraylist)
+		admin.GET("/audit", middlerware.AdminResourceAuth(model.AdminResourceAudit), adminHandler.ListAuditLogs)
 	}
 	return r
 }

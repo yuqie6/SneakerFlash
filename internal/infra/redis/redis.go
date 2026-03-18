@@ -34,3 +34,10 @@ func Init(cfg config.RedisConfig) {
 
 	log.Println("redis 初始化成功")
 }
+
+func Close() error {
+	if RDB == nil {
+		return nil
+	}
+	return RDB.Close()
+}

@@ -3,6 +3,7 @@ package repository
 import (
 	"SneakerFlash/internal/model"
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -44,6 +45,14 @@ func (r *OrderRepo) GetByOrderNum(ctx context.Context, orderNum string) (*model.
 func (r *OrderRepo) GetByIDForUpdate(ctx context.Context, id uint) (*model.Order, error) {
 	var order model.Order
 	if err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&order).Error; err != nil {
+		return nil, err
+	}
+	return &order, nil
+}
+
+func (r *OrderRepo) GetByOrderNumForUpdate(ctx context.Context, orderNum string) (*model.Order, error) {
+	var order model.Order
+	if err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("order_num = ?", orderNum).First(&order).Error; err != nil {
 		return nil, err
 	}
 	return &order, nil
@@ -133,6 +142,18 @@ func (r *OrderRepo) GetByOrderNums(ctx context.Context, orderNums []string) ([]*
 		return orders, nil
 	}
 	if err := r.db.WithContext(ctx).Where("order_num IN ?", orderNums).Find(&orders).Error; err != nil {
+		return nil, err
+	}
+	return orders, nil
+}
+
+func (r *OrderRepo) ListStaleUnpaid(ctx context.Context, before time.Time, limit int) ([]model.Order, error) {
+	var orders []model.Order
+	query := r.db.WithContext(ctx).Where("status = ? AND created_at <= ?", model.OrderStatusUnpaid, before).Order("id asc")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if err := query.Find(&orders).Error; err != nil {
 		return nil, err
 	}
 	return orders, nil

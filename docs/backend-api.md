@@ -26,7 +26,7 @@
 
 ## 用户与上传
 - `GET /profile`（鉴权）
-  成功：`data=User`，包含 `total_spent_cents`、`growth_level`、`role`。
+  成功：`data=User`，包含 `total_spent_cents`、`growth_level`、`role`、`permissions`。
 - `PUT /profile`（鉴权）
   Body：`{ "user_name"?: string, "avatar"?: string }`；至少传一项。
 - `POST /upload`（鉴权）
@@ -56,7 +56,7 @@
   未开始/已结束当前返回 `400 + code=400`；系统繁忙当前返回 `503 + code=500`。
 
 ## 订单与支付
-- `GET /orders?page=1&page_size=10&status=0|1|2`（鉴权）
+- `GET /orders?page=1&page_size=10&status=0|1|2|3`（鉴权）
   成功：`data={ list: Order[], total, page, page_size }`。
 - `GET /orders/:id`（鉴权，仅本人）
   成功：`data={ order: Order, payment?: Payment, coupon?: MyCoupon }`。
@@ -69,6 +69,10 @@
   Body：`{ "coupon_id": number | null }`
   `coupon_id` 为空时表示移除已用优惠券。
   成功：`data={ order, payment?, coupon? }`。
+- `GET /stream/orders/:id?access_token=<token>`（SSE，鉴权）
+  推送订单状态变化事件，`event.data` 为 JSON 字符串，包含 `order_id`、`status`、`payment_status`。
+- `GET /stream/products/:id?access_token=<token>`（SSE，鉴权）
+  推送库存摘要事件，`event.data` 为 JSON 字符串，包含 `product_id`、`stock`。
 - `POST /payment/callback`
   Body：`{ "payment_id": string, "status": "paid"|"failed"|"refunded", "notify_data"?: string }`
   成功：`data={ order, payment, coupon? }`；支付单不存在返回 `404`。
@@ -91,11 +95,15 @@
 
 ## 管理后台
 - 鉴权要求：所有 `/admin/*` 接口都需要管理员 `access_token`；普通用户会收到 HTTP `403` + `msg="需要管理员权限"`
+- 管理角色：
+  - 全量管理员：`admin`
+  - 资源级管理员：`ops_admin`、`risk_admin`、`coupon_admin`、`audit_admin`
+  - `/profile.permissions` 返回当前管理员可访问的后台资源集合
 - `GET /admin/stats`
   成功：`data={ total_users, total_orders, total_revenue_cents, total_products, pending_orders }`。
 - `GET /admin/users?page=1&page_size=20`
   成功：`data={ list: User[], total, page, page_size }`。
-- `GET /admin/orders?page=1&page_size=20&status=0|1|2`
+- `GET /admin/orders?page=1&page_size=20&status=0|1|2|3`
   成功：`data={ list: Order[], total, page, page_size }`。
 - `GET /admin/products?page=1&page_size=20`
   成功：`data={ list: Product[], total, page, page_size }`。
@@ -116,14 +124,17 @@
   Body：`{ "type": "ip"|"user", "value": string }`。
 - `DELETE /admin/risk/blacklist` / `DELETE /admin/risk/graylist`
   Body 同上；成功：`data={ "message": "ok" }`。
+- `GET /admin/audit?page=1&page_size=20&actor_name=&resource=&action=`
+  成功：`data={ list: AuditLog[], total, page, page_size }`。
 
 ## 数据模型（核心字段）
 - `User`：`id`, `username`, `balance`, `avatar`, `total_spent_cents`, `growth_level`, `role`, `created_at`, `updated_at`
 - `Product`：`id`, `user_id`, `name`, `price`, `stock`, `start_time`, `end_time`, `image`, `created_at`, `updated_at`
-- `Order`：`id`, `user_id`, `product_id`, `order_num`, `status`, `created_at`, `updated_at`
+- `Order`：`id`, `user_id`, `product_id`, `order_num`, `status(0=unpaid,1=paid,2=failed,3=cancelled)`, `created_at`, `updated_at`
 - `Payment`：`id`, `order_id`, `payment_id`, `amount_cents`, `status`, `notify_data`, `created_at`, `updated_at`
 - `Coupon`：`id`, `type`, `title`, `description`, `amount_cents`, `discount_rate`, `min_spend_cents`, `valid_from`, `valid_to`, `purchasable`, `price_cents`, `status`
 - `MyCoupon`：`id`, `coupon_id`, `type`, `title`, `description`, `amount_cents`, `discount_rate`, `min_spend_cents`, `status`, `valid_from`, `valid_to`, `obtained_from`
+- `AuditLog`：`id`, `actor_id`, `actor_name`, `actor_role`, `resource`, `action`, `resource_id`, `request_path`, `request_ip`, `request_body`, `result`, `error_message`, `request_id`, `created_at`
 
 ## 风控与限流
 - 开关：`risk.enable`

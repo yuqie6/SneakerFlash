@@ -69,12 +69,16 @@ type ReadinessStatusResponse struct {
 
 // UserResponse 用户信息输出。
 type UserResponse struct {
-	ID        uint      `json:"ID"`
-	CreatedAt time.Time `json:"CreatedAt"`
-	UpdatedAt time.Time `json:"UpdatedAt"`
-	Username  string    `json:"username"`
-	Balance   float64   `json:"balance"`
-	Avatar    string    `json:"avatar"`
+	ID              uint      `json:"id"`
+	Username        string    `json:"username"`
+	Balance         float64   `json:"balance"`
+	Avatar          string    `json:"avatar"`
+	TotalSpentCents int64     `json:"total_spent_cents"`
+	GrowthLevel     int       `json:"growth_level"`
+	Role            string    `json:"role"`
+	Permissions     []string  `json:"permissions,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // PaymentResponse 用于描述支付单输出，避免暴露内部 gorm.Model。

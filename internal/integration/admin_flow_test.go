@@ -33,16 +33,17 @@ func TestAdminFlow_StatsAndResources(t *testing.T) {
 	adminSvc := service.NewAdminService(gdb, repository.NewUserRepo(gdb), repository.NewProductRepo(gdb))
 	riskSvc := service.NewRiskService(nil)
 	couponSvc := service.NewCouponService(gdb)
-	adminHandler := handler.NewAdminHandler(adminSvc, riskSvc, couponSvc)
+	auditSvc := service.NewAuditService(gdb)
+	adminHandler := handler.NewAdminHandler(adminSvc, riskSvc, couponSvc, auditSvc)
 
 	router := gin.New()
 	admin := router.Group("/api/v1/admin")
 	admin.Use(middlerware.JWTauth(), middlerware.AdminAuth())
 	{
-		admin.GET("/stats", adminHandler.Stats)
-		admin.GET("/users", adminHandler.ListUsers)
-		admin.GET("/orders", adminHandler.ListOrders)
-		admin.GET("/products", adminHandler.ListProducts)
+		admin.GET("/stats", middlerware.AdminResourceAuth(model.AdminResourceStats), adminHandler.Stats)
+		admin.GET("/users", middlerware.AdminResourceAuth(model.AdminResourceUsers), adminHandler.ListUsers)
+		admin.GET("/orders", middlerware.AdminResourceAuth(model.AdminResourceOrders), adminHandler.ListOrders)
+		admin.GET("/products", middlerware.AdminResourceAuth(model.AdminResourceProducts), adminHandler.ListProducts)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/stats", nil)
@@ -153,22 +154,24 @@ func TestAdminFlow_CouponsAndRisk(t *testing.T) {
 	adminSvc := service.NewAdminService(gdb, repository.NewUserRepo(gdb), repository.NewProductRepo(gdb))
 	riskSvc := service.NewRiskService(redis.RDB)
 	couponSvc := service.NewCouponService(gdb)
-	adminHandler := handler.NewAdminHandler(adminSvc, riskSvc, couponSvc)
+	auditSvc := service.NewAuditService(gdb)
+	adminHandler := handler.NewAdminHandler(adminSvc, riskSvc, couponSvc, auditSvc)
 
 	router := gin.New()
 	admin := router.Group("/api/v1/admin")
 	admin.Use(middlerware.JWTauth(), middlerware.AdminAuth())
 	{
-		admin.GET("/coupons", adminHandler.ListCoupons)
-		admin.POST("/coupons", adminHandler.CreateCoupon)
-		admin.PUT("/coupons/:id", adminHandler.UpdateCoupon)
-		admin.DELETE("/coupons/:id", adminHandler.DeleteCoupon)
-		admin.GET("/risk/blacklist", adminHandler.ListBlacklist)
-		admin.POST("/risk/blacklist", adminHandler.AddBlacklist)
-		admin.DELETE("/risk/blacklist", adminHandler.RemoveBlacklist)
-		admin.GET("/risk/graylist", adminHandler.ListGraylist)
-		admin.POST("/risk/graylist", adminHandler.AddGraylist)
-		admin.DELETE("/risk/graylist", adminHandler.RemoveGraylist)
+		admin.GET("/coupons", middlerware.AdminResourceAuth(model.AdminResourceCoupons), adminHandler.ListCoupons)
+		admin.POST("/coupons", middlerware.AdminResourceAuth(model.AdminResourceCoupons), adminHandler.CreateCoupon)
+		admin.PUT("/coupons/:id", middlerware.AdminResourceAuth(model.AdminResourceCoupons), adminHandler.UpdateCoupon)
+		admin.DELETE("/coupons/:id", middlerware.AdminResourceAuth(model.AdminResourceCoupons), adminHandler.DeleteCoupon)
+		admin.GET("/risk/blacklist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.ListBlacklist)
+		admin.POST("/risk/blacklist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.AddBlacklist)
+		admin.DELETE("/risk/blacklist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.RemoveBlacklist)
+		admin.GET("/risk/graylist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.ListGraylist)
+		admin.POST("/risk/graylist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.AddGraylist)
+		admin.DELETE("/risk/graylist", middlerware.AdminResourceAuth(model.AdminResourceRisk), adminHandler.RemoveGraylist)
+		admin.GET("/audit", middlerware.AdminResourceAuth(model.AdminResourceAudit), adminHandler.ListAuditLogs)
 	}
 
 	createBody := []byte(`{"type":"full_cut","title":"Admin 券","description":"后台创建","amount_cents":800,"discount_rate":0,"min_spend_cents":3000,"valid_from":"2026-03-18T10:00","valid_to":"2026-03-31T10:00","purchasable":true,"price_cents":100,"status":"active"}`)
@@ -279,6 +282,26 @@ func TestAdminFlow_CouponsAndRisk(t *testing.T) {
 	ctx := context.Background()
 	if _, err := repository.NewCouponRepo(gdb).GetByID(ctx, createResp.Data.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("coupon still exists, err=%v", err)
+	}
+
+	auditReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/audit?page=1&page_size=20&resource=coupons", nil)
+	auditReq.Header.Set("Authorization", "Bearer "+token)
+	auditRec := httptest.NewRecorder()
+	router.ServeHTTP(auditRec, auditReq)
+	if auditRec.Code != http.StatusOK {
+		t.Fatalf("audit status = %d body=%s", auditRec.Code, auditRec.Body.String())
+	}
+
+	var auditResp struct {
+		Data struct {
+			List []model.AuditLog `json:"list"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(auditRec.Body.Bytes(), &auditResp); err != nil {
+		t.Fatalf("decode audit logs: %v", err)
+	}
+	if len(auditResp.Data.List) == 0 {
+		t.Fatalf("expected audit logs for coupon actions")
 	}
 }
 

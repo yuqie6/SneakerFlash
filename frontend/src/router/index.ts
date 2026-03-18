@@ -48,12 +48,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import("@/views/Admin/Layout.vue"),
     meta: { requiresAuth: true, requiresAdmin: true },
     children: [
-      { path: "", name: "admin-dashboard", component: () => import("@/views/Admin/Dashboard.vue") },
-      { path: "users", name: "admin-users", component: () => import("@/views/Admin/Users.vue") },
-      { path: "orders", name: "admin-orders", component: () => import("@/views/Admin/Orders.vue") },
-      { path: "coupons", name: "admin-coupons", component: () => import("@/views/Admin/Coupons.vue") },
-      { path: "products", name: "admin-products", component: () => import("@/views/Admin/Products.vue") },
-      { path: "risk", name: "admin-risk", component: () => import("@/views/Admin/Risk.vue") },
+      { path: "", name: "admin-dashboard", component: () => import("@/views/Admin/Dashboard.vue"), meta: { requiresPermission: "stats" } },
+      { path: "users", name: "admin-users", component: () => import("@/views/Admin/Users.vue"), meta: { requiresPermission: "users" } },
+      { path: "orders", name: "admin-orders", component: () => import("@/views/Admin/Orders.vue"), meta: { requiresPermission: "orders" } },
+      { path: "coupons", name: "admin-coupons", component: () => import("@/views/Admin/Coupons.vue"), meta: { requiresPermission: "coupons" } },
+      { path: "products", name: "admin-products", component: () => import("@/views/Admin/Products.vue"), meta: { requiresPermission: "products" } },
+      { path: "risk", name: "admin-risk", component: () => import("@/views/Admin/Risk.vue"), meta: { requiresPermission: "risk" } },
+      { path: "audit", name: "admin-audit", component: () => import("@/views/Admin/Audit.vue"), meta: { requiresPermission: "audit" } },
     ],
   },
 ]
@@ -66,18 +67,40 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
 
   router.beforeEach(async (to) => {
     const userStore = useUserStore()
+    const ensureProfile = async () => {
+      if (!userStore.profile && userStore.accessToken) {
+        await userStore.fetchProfile()
+      }
+    }
 
     if (to.meta.requiresAuth && !userStore.accessToken) {
       return { name: "login", query: { redirect: to.fullPath } }
     }
 
     if (to.meta.requiresAdmin) {
-      await userStore.fetchProfile()
+      await ensureProfile()
       if (!userStore.profile) {
         return { name: "login", query: { redirect: to.fullPath } }
       }
-      if (userStore.profile.role !== "admin") {
+      if (!userStore.isAdmin) {
         return { name: "home" }
+      }
+    }
+
+    if (typeof to.meta.requiresPermission === "string") {
+      await ensureProfile()
+      if (!userStore.hasPermission(to.meta.requiresPermission)) {
+        const permissionRoutePairs: Array<[string, string]> = [
+          ["stats", "admin-dashboard"],
+          ["users", "admin-users"],
+          ["orders", "admin-orders"],
+          ["products", "admin-products"],
+          ["coupons", "admin-coupons"],
+          ["risk", "admin-risk"],
+          ["audit", "admin-audit"],
+        ]
+        const fallback = permissionRoutePairs.find(([permission]) => userStore.hasPermission(permission))
+        return fallback ? { name: fallback[1] as string } : { name: "home" }
       }
     }
 

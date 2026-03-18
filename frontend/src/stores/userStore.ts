@@ -15,6 +15,11 @@ export const useUserStore = defineStore("user", {
     profile: null as User | null,
     loading: false,
   }),
+  getters: {
+    permissions: (state) => state.profile?.permissions || [],
+    isAdmin: (state) => (state.profile?.permissions?.length || 0) > 0,
+    hasPermission: (state) => (permission: string) => (state.profile?.permissions || []).includes(permission),
+  },
   actions: {
     setTokens(access: string, refresh?: string) {
       this.accessToken = access

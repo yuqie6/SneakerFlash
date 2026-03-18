@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from "vue"
+import { onMounted, onUnmounted, ref, computed } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import MainLayout from "@/layout/MainLayout.vue"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import MagmaButton from "@/components/motion/MagmaButton.vue"
-import api, { resolveAssetUrl } from "@/lib/api"
+import api, { buildStreamUrl, resolveAssetUrl } from "@/lib/api"
 import type { Order, OrderWithPayment } from "@/types/order"
 import type { Payment } from "@/types/payment"
 import type { Coupon } from "@/types/coupon"
@@ -22,6 +22,9 @@ const product = ref<Product | null>(null)
 const coupons = ref<Coupon[]>([])
 const couponsLoading = ref(false)
 const selectedCouponId = ref<number | null>(null)
+let orderEventSource: EventSource | null = null
+let productEventSource: EventSource | null = null
+let pollTimer: number | null = null
 
 const fetchDetail = async () => {
   loading.value = true
@@ -33,10 +36,79 @@ const fetchDetail = async () => {
       await fetchProduct(res.order.product_id)
     }
     await fetchCoupons()
+    stopRealtimeIfResolved()
   } catch (err: any) {
     toast.error(err?.message || "获取订单失败")
   } finally {
     loading.value = false
+  }
+}
+
+const stopPolling = () => {
+  if (pollTimer !== null) {
+    window.clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+const closeStreams = () => {
+  orderEventSource?.close()
+  productEventSource?.close()
+  orderEventSource = null
+  productEventSource = null
+}
+
+const stopAllRealtime = () => {
+  stopPolling()
+  closeStreams()
+}
+
+const startPollingFallback = () => {
+  if (pollTimer !== null || !isPendingPayment.value) return
+  pollTimer = window.setInterval(async () => {
+    if (!isPendingPayment.value) {
+      stopAllRealtime()
+      return
+    }
+    await fetchDetail()
+    stopRealtimeIfResolved()
+  }, 5000)
+}
+
+const bindStreams = () => {
+  closeStreams()
+  stopPolling()
+
+  const accessToken = localStorage.getItem("access_token") || ""
+  if (!accessToken || !order.value?.id) return
+
+  orderEventSource = new EventSource(buildStreamUrl(`/stream/orders/${order.value.id}`, accessToken))
+  orderEventSource.onmessage = async () => {
+    await fetchDetail()
+    stopRealtimeIfResolved()
+  }
+  orderEventSource.onerror = () => {
+    orderEventSource?.close()
+    orderEventSource = null
+    startPollingFallback()
+  }
+
+  if (order.value.product_id) {
+    productEventSource = new EventSource(buildStreamUrl(`/stream/products/${order.value.product_id}`, accessToken))
+    productEventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { event: string; data?: { stock?: number } }
+        if (typeof payload.data?.stock === "number" && product.value) {
+          product.value = { ...product.value, stock: payload.data.stock }
+        }
+      } catch {
+        // ignore malformed event
+      }
+    }
+    productEventSource.onerror = () => {
+      productEventSource?.close()
+      productEventSource = null
+    }
   }
 }
 
@@ -63,6 +135,12 @@ const productCover = computed(
   () => resolveAssetUrl(product.value?.image) || "https://dummyimage.com/400x300/F9F8F6/1C1C1C&text=SneakerFlash"
 )
 
+const stopRealtimeIfResolved = () => {
+  if (!isPendingPayment.value) {
+    stopAllRealtime()
+  }
+}
+
 const pay = async (status: Payment["status"]) => {
   if (!payment.value) {
     toast.error("暂无支付单")
@@ -77,6 +155,11 @@ const pay = async (status: Payment["status"]) => {
     })
     toast.success(status === "paid" ? "支付成功" : "支付失败")
     await fetchDetail()
+    if (isPendingPayment.value) bindStreams()
+    else {
+      closeStreams()
+      stopPolling()
+    }
   } catch (err: any) {
     toast.error(err?.message || "支付操作失败")
   } finally {
@@ -120,6 +203,11 @@ const applyCoupon = async () => {
     selectedCouponId.value = res.coupon?.id ?? null
     toast.success(selectedCouponId.value ? "已应用优惠券" : "已取消优惠券")
     await fetchCoupons()
+    if (isPendingPayment.value) {
+      bindStreams()
+    } else {
+      stopAllRealtime()
+    }
   } catch (err: any) {
     toast.error(err?.message || "优惠券应用失败")
   } finally {
@@ -132,6 +220,7 @@ const orderStatusText = (s?: number) => {
     case 0: return "待支付"
     case 1: return "已支付"
     case 2: return "支付失败"
+    case 3: return "已取消"
     default: return "未知"
   }
 }
@@ -146,7 +235,17 @@ const paymentStatusText = (s?: Payment["status"]) => {
   }
 }
 
-onMounted(fetchDetail)
+onMounted(async () => {
+  await fetchDetail()
+  if (isPendingPayment.value) {
+    bindStreams()
+  }
+})
+
+onUnmounted(() => {
+  closeStreams()
+  stopPolling()
+})
 </script>
 
 <template>
@@ -198,7 +297,7 @@ onMounted(fetchDetail)
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-[#1C1C1C]/60">状态</span>
-                <span class="border px-2 py-0.5 text-xs" :class="order?.status === 1 ? 'border-[#1C1C1C]/20 text-[#1C1C1C]/70' : order?.status === 2 ? 'border-[#1C1C1C]/30 text-[#1C1C1C]/50' : 'border-[#1C1C1C]/20 text-[#1C1C1C]/70'">
+                <span class="border px-2 py-0.5 text-xs" :class="order?.status === 1 ? 'border-[#1C1C1C]/20 text-[#1C1C1C]/70' : order?.status === 2 || order?.status === 3 ? 'border-[#1C1C1C]/30 text-[#1C1C1C]/50' : 'border-[#1C1C1C]/20 text-[#1C1C1C]/70'">
                   {{ orderStatusText(order?.status) }}
                 </span>
               </div>
@@ -283,7 +382,7 @@ onMounted(fetchDetail)
                   :disabled="!isPendingPayment || paying"
                   @click="pay('failed')"
                 >
-                  取消订单
+                  标记支付失败
                 </button>
               </div>
               <p class="text-xs text-[#1C1C1C]/40">优惠券仅在待支付状态下可使用，支付后将自动发货。</p>

@@ -5,6 +5,7 @@ import (
 	"SneakerFlash/internal/infra/kafka"
 	"SneakerFlash/internal/infra/redis"
 	"SneakerFlash/internal/model"
+	"SneakerFlash/internal/pkg/breaker"
 	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/repository"
 	"context"
@@ -106,10 +107,15 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 	userSetKey := fmt.Sprintf("product:users:%d", productID)
 
 	// 2. 执行 lua 脚本
+	if !breaker.Default.Allow("redis") {
+		return nil, ErrSeckillBusy
+	}
 	res, err := seckillScript.Run(ctx, redis.RDB, []string{stockKey, userSetKey}, userID).Int()
 	if err != nil {
-		return nil, err
+		breaker.Default.ReportFailure("redis")
+		return nil, ErrSeckillBusy
 	}
+	breaker.Default.ReportSuccess("redis")
 
 	// 3. 处理 lua 结果
 	switch res {
@@ -192,10 +198,16 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 // sendOutboxMessage 异步发送 Outbox 消息到 Kafka
 func (s *SeckillService) sendOutboxMessage(msg *model.OutboxMessage) {
 	ctx := context.Background()
+	if !breaker.Default.Allow("kafka_producer") {
+		slog.Warn("Kafka 熔断开启，跳过即时发送，等待补偿任务处理", slog.Uint64("msg_id", uint64(msg.ID)))
+		return
+	}
 	if err := sendKafkaMessage(msg.Topic, msg.Payload); err != nil {
+		breaker.Default.ReportFailure("kafka_producer")
 		slog.Warn("Kafka 发送失败，等待补偿任务处理", slog.Uint64("msg_id", uint64(msg.ID)), slog.Any("error", err))
 		return
 	}
+	breaker.Default.ReportSuccess("kafka_producer")
 	// 发送成功，标记为已发送
 	if err := s.outboxRepo.MarkSent(ctx, msg.ID); err != nil {
 		slog.Error("标记 Outbox 消息发送成功失败", slog.Uint64("msg_id", uint64(msg.ID)), slog.Any("error", err))

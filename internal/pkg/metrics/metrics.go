@@ -123,9 +123,11 @@ func sanitize(v string) string {
 
 // Registry
 var (
-	httpRequests  = NewCounterVec("http_requests_total", "Total HTTP requests", []string{"path", "method", "code"})
-	httpDuration  = NewHistogram("http_request_duration_seconds", "HTTP request latency seconds", []string{"path", "method"}, []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2})
-	seckillResult = NewCounterVec("seckill_requests_total", "Seckill business result", []string{"result"})
+	httpRequests      = NewCounterVec("http_requests_total", "Total HTTP requests", []string{"path", "method", "code"})
+	httpDuration      = NewHistogram("http_request_duration_seconds", "HTTP request latency seconds", []string{"path", "method"}, []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2})
+	seckillResult     = NewCounterVec("seckill_requests_total", "Seckill business result", []string{"result"})
+	breakerTransition = NewCounterVec("circuit_breaker_transitions_total", "Circuit breaker state transitions", []string{"breaker", "from", "to"})
+	breakerReject     = NewCounterVec("circuit_breaker_reject_total", "Circuit breaker rejected calls", []string{"breaker", "state"})
 )
 
 // ObserveHTTP 记录 HTTP 维度请求。
@@ -146,12 +148,29 @@ func IncSeckillResult(result string) {
 	seckillResult.Inc(map[string]string{"result": result})
 }
 
+func IncBreakerTransition(name, from, to string) {
+	breakerTransition.Inc(map[string]string{
+		"breaker": name,
+		"from":    from,
+		"to":      to,
+	})
+}
+
+func IncBreakerReject(name, state string) {
+	breakerReject.Inc(map[string]string{
+		"breaker": name,
+		"state":   state,
+	})
+}
+
 // Handler 暴露 Prometheus 文本格式。
 func Handler(w http.ResponseWriter, _ *http.Request) {
 	var sb strings.Builder
 	httpRequests.Export(&sb)
 	httpDuration.Export(&sb)
 	seckillResult.Export(&sb)
+	breakerTransition.Export(&sb)
+	breakerReject.Export(&sb)
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	_, _ = w.Write([]byte(sb.String()))
 }

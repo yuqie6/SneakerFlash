@@ -137,6 +137,30 @@ func TestUserService_PromoteToAdmin(t *testing.T) {
 	}
 }
 
+func TestUserService_PromoteToAdminKeepsScopedAdminRole(t *testing.T) {
+	svc, repo, _ := newUserServiceForTest(t)
+	ctx := context.Background()
+
+	if err := svc.Register(ctx, "alice", "password-123"); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := repo.UpdateProfile(ctx, 1, map[string]any{"role": model.UserRoleRiskAdmin}); err != nil {
+		t.Fatalf("UpdateProfile(role) error = %v", err)
+	}
+
+	if err := svc.PromoteToAdmin(ctx, "alice"); err != nil {
+		t.Fatalf("PromoteToAdmin() error = %v", err)
+	}
+
+	user, err := repo.GetByUsername(ctx, "alice")
+	if err != nil {
+		t.Fatalf("GetByUsername() error = %v", err)
+	}
+	if user.Role != model.UserRoleRiskAdmin {
+		t.Fatalf("role = %q, want %q", user.Role, model.UserRoleRiskAdmin)
+	}
+}
+
 func TestUserService_RefreshUsesCurrentRole(t *testing.T) {
 	svc, repo, _ := newUserServiceForTest(t)
 	ctx := context.Background()

@@ -99,7 +99,11 @@ func setStockCache(ctx context.Context, productID uint, stock int) error {
 		return errors.New("context is nil")
 	}
 	key := fmt.Sprintf("product:stock:%d", productID)
-	return redis.RDB.Set(ctx, key, stock, 0).Err()
+	if err := redis.RDB.Set(ctx, key, stock, 0).Err(); err != nil {
+		return err
+	}
+	publishProductStockEvent(productID, stock)
+	return nil
 }
 
 func pendingOrderKey(orderNum string) string {

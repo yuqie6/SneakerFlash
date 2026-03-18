@@ -163,3 +163,89 @@ func TestOrderService_HandlePaymentResultPaidIsIdempotent(t *testing.T) {
 		t.Fatalf("second HandlePaymentResult() = %+v, want paid state preserved", gotAgain)
 	}
 }
+
+func TestOrderService_CancelExpiredOrders(t *testing.T) {
+	svc, fixtures := newOrderServiceForTest(t)
+	ctx := context.Background()
+
+	if err := db.DB.Model(&model.Order{}).Where("id = ?", fixtures.order.ID).Update("created_at", time.Now().Add(-20*time.Minute)).Error; err != nil {
+		t.Fatalf("update order created_at: %v", err)
+	}
+	if err := setStockCache(ctx, fixtures.product.ID, fixtures.product.Stock); err != nil {
+		t.Fatalf("set stock cache: %v", err)
+	}
+	if err := redisinfra.RDB.SAdd(ctx, "product:users:1", fixtures.user.ID).Err(); err != nil {
+		t.Fatalf("seed user marker: %v", err)
+	}
+
+	cancelled, err := svc.CancelExpiredOrders(ctx, 15*time.Minute, 10)
+	if err != nil {
+		t.Fatalf("CancelExpiredOrders() error = %v", err)
+	}
+	if cancelled != 1 {
+		t.Fatalf("cancelled = %d, want 1", cancelled)
+	}
+
+	order, err := repository.NewOrderRepo(db.DB).GetByID(ctx, fixtures.order.ID)
+	if err != nil {
+		t.Fatalf("load order: %v", err)
+	}
+	if order.Status != model.OrderStatusCancelled {
+		t.Fatalf("order status = %v, want %v", order.Status, model.OrderStatusCancelled)
+	}
+
+	payment, err := repository.NewPaymentRepo(db.DB).GetByOrderID(ctx, fixtures.order.ID)
+	if err != nil {
+		t.Fatalf("load payment: %v", err)
+	}
+	if payment.Status != model.PaymentStatusFailed {
+		t.Fatalf("payment status = %v, want %v", payment.Status, model.PaymentStatusFailed)
+	}
+
+	product, err := repository.NewProductRepo(db.DB).GetByID(ctx, fixtures.product.ID)
+	if err != nil {
+		t.Fatalf("load product: %v", err)
+	}
+	if product.Stock != fixtures.product.Stock+1 {
+		t.Fatalf("product stock = %d, want %d", product.Stock, fixtures.product.Stock+1)
+	}
+}
+
+func TestOrderService_CancelExpiredOrdersSkipsPaidPayment(t *testing.T) {
+	svc, fixtures := newOrderServiceForTest(t)
+	ctx := context.Background()
+
+	if err := db.DB.Model(&model.Order{}).Where("id = ?", fixtures.order.ID).Update("created_at", time.Now().Add(-20*time.Minute)).Error; err != nil {
+		t.Fatalf("update order created_at: %v", err)
+	}
+	if err := db.DB.Model(&model.Payment{}).Where("id = ?", fixtures.payment.ID).Update("status", model.PaymentStatusPaid).Error; err != nil {
+		t.Fatalf("update payment status: %v", err)
+	}
+	if err := setStockCache(ctx, fixtures.product.ID, fixtures.product.Stock); err != nil {
+		t.Fatalf("set stock cache: %v", err)
+	}
+
+	cancelled, err := svc.CancelExpiredOrders(ctx, 15*time.Minute, 10)
+	if err != nil {
+		t.Fatalf("CancelExpiredOrders() error = %v", err)
+	}
+	if cancelled != 0 {
+		t.Fatalf("cancelled = %d, want 0", cancelled)
+	}
+
+	order, err := repository.NewOrderRepo(db.DB).GetByID(ctx, fixtures.order.ID)
+	if err != nil {
+		t.Fatalf("load order: %v", err)
+	}
+	if order.Status != model.OrderStatusUnpaid {
+		t.Fatalf("order status = %v, want %v", order.Status, model.OrderStatusUnpaid)
+	}
+
+	product, err := repository.NewProductRepo(db.DB).GetByID(ctx, fixtures.product.ID)
+	if err != nil {
+		t.Fatalf("load product: %v", err)
+	}
+	if product.Stock != fixtures.product.Stock {
+		t.Fatalf("product stock = %d, want %d", product.Stock, fixtures.product.Stock)
+	}
+}

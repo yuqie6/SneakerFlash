@@ -76,3 +76,20 @@ func Ping(topic string) error {
 
 	return nil
 }
+
+func CloseProducer() error {
+	var firstErr error
+	if Producer != nil {
+		if err := Producer.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		Producer = nil
+	}
+	if Client != nil {
+		if err := Client.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		Client = nil
+	}
+	return firstErr
+}

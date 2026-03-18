@@ -17,7 +17,7 @@ import (
 type BatchMessageHandler func(msgs [][]byte) (failedIndexes []int, err error)
 
 // StartBatchConsumer 启动批量消费模式的 Kafka Consumer
-func StartBatchConsumer(cfg config.KafkaConfig, handler BatchMessageHandler) {
+func StartBatchConsumer(ctx context.Context, cfg config.KafkaConfig, handler BatchMessageHandler) error {
 	saramaCfg := sarama.NewConfig()
 	saramaCfg.Consumer.Return.Errors = true
 	saramaCfg.Consumer.Offsets.Initial = resolveInitialOffset(cfg.InitialOffset)
@@ -25,7 +25,7 @@ func StartBatchConsumer(cfg config.KafkaConfig, handler BatchMessageHandler) {
 	groupID := resolveConsumerGroup(cfg.ConsumerGroup)
 	group, err := sarama.NewConsumerGroup(cfg.Brokers, groupID, saramaCfg)
 	if err != nil {
-		log.Fatalf("[ERROR] 创建消费组失败: %v", err)
+		return fmt.Errorf("create consumer group: %w", err)
 	}
 	defer group.Close()
 
@@ -43,7 +43,6 @@ func StartBatchConsumer(cfg config.KafkaConfig, handler BatchMessageHandler) {
 		maxRetries = 3
 	}
 
-	ctx := context.Background()
 	consumer := &BatchConsumerHandler{
 		callback:      handler,
 		batchSize:     batchSize,
@@ -60,9 +59,15 @@ func StartBatchConsumer(cfg config.KafkaConfig, handler BatchMessageHandler) {
 		cfg.Topic, groupID, normalizeInitialOffset(cfg.InitialOffset), batchSize, flushInterval, maxRetries, cfg.DLQTopic)
 
 	for {
+		if ctx.Err() != nil {
+			return nil
+		}
 		topics := []string{cfg.Topic}
 		err := group.Consume(ctx, topics, consumer)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
 			log.Printf("[ERROR] 消费异常: %v", err)
 		}
 	}

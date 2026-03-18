@@ -95,6 +95,7 @@ make prod-down
 - `seckill_orders` 与 `seckill-order-dlq` 已创建
 - Redis 可用
 - DB 可写
+- 若启用自动取消任务，确认 Worker 所在时区与业务期望一致；当前实现按应用本地时间扫描 15 分钟未支付订单
 
 ### 前端联调前
 - API 服务可访问
@@ -132,11 +133,37 @@ make prod-down
   - Kafka lag / 消费速率
   - Redis 命中率 / 时延
   - MySQL QPS / 慢查询 / 连接数
+  - 熔断状态切换次数 / 拒绝次数
 
 ## 日志
 - 后端日志输出由 `internal/pkg/logger` 统一管理
 - 日志文件默认位于 `log/`
 - 推荐在生产环境按模块拆分 API / Worker 日志
+- 后台关键运营动作会写入 `audit_logs` 表，可通过 `/admin/audit` 查询
+
+## 优雅停机
+- API 已接入 `SIGINT` / `SIGTERM` 信号处理：先停止接收新请求，再等待在途请求完成，最后依次关闭 Kafka、Redis、MySQL
+- Worker 已接入同样的信号处理：先停止 cron，再退出 Kafka consumer，最后关闭 Kafka、Redis、MySQL
+- 验证建议：
+  - API：发送长请求后执行停止信号，确认请求能正常返回
+  - Worker：消费中发送停止信号，确认不会丢失当前 batch
+
+## 未支付订单自动取消
+- Worker 默认每 30 秒扫描一次 15 分钟前创建且仍为 `unpaid` 的订单
+- 自动取消会执行：
+  - 订单状态推进到 `cancelled`
+  - 支付单从 `pending` 推进到 `failed`
+  - 释放已占用优惠券
+  - 回补 MySQL / Redis 库存
+  - 删除 Redis 中的重复下单标记
+- 建议把 `cancelled` 订单占比、自动取消数量纳入日常观测
+
+## SSE 实时推送
+- 当前提供：
+  - `/api/v1/stream/orders/:id?access_token=<token>`
+  - `/api/v1/stream/products/:id?access_token=<token>`
+- SSE 仅用于提升前端刷新体验，不承担事实源角色；异常时前端仍回退轮询
+- 若接入反向代理，需关闭响应缓冲并允许长连接
 
 ## Docker 代理修复
 ### 现象

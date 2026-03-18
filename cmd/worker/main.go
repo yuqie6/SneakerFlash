@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/cron"
@@ -32,6 +35,7 @@ func main() {
 	orderRepo := repository.NewOrderRepo(db.DB)
 
 	workerSvc := service.NewWorkerService(db.DB, productRepo, orderRepo)
+	orderCancelCron := cron.NewOrderCancelCron(db.DB)
 
 	// 启动 VIP 月度发券定时任务
 	vipCron := cron.NewVIPCouponCron(db.DB)
@@ -42,7 +46,24 @@ func main() {
 	outboxCron := cron.NewOutboxCron(db.DB, config.Conf.Data.Kafka)
 	outboxCron.Start()
 	defer outboxCron.Stop()
+	orderCancelCron.Start()
+	defer orderCancelCron.Stop()
 
-	// 使用批量消费模式，大幅提升 TPS
-	kafka.StartBatchConsumer(config.Conf.Data.Kafka, workerSvc.BatchCreateOrdersFromMessages)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	if err := kafka.StartBatchConsumer(ctx, config.Conf.Data.Kafka, workerSvc.BatchCreateOrdersFromMessages); err != nil {
+		slog.Error("worker 消费异常退出", slog.Any("err", err))
+		os.Exit(1)
+	}
+
+	if err := kafka.CloseProducer(); err != nil {
+		slog.Warn("关闭 Kafka 失败", slog.Any("err", err))
+	}
+	if err := redis.Close(); err != nil {
+		slog.Warn("关闭 Redis 失败", slog.Any("err", err))
+	}
+	if err := db.Close(); err != nil {
+		slog.Warn("关闭数据库失败", slog.Any("err", err))
+	}
 }

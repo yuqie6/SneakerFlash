@@ -1,4 +1,4 @@
-export type OrderStatus = 0 | 1 | 2
+export type OrderStatus = 0 | 1 | 2 | 3
 
 export interface Order {
   id: number

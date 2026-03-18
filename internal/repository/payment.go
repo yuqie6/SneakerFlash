@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type PaymentRepo struct {
@@ -61,6 +62,14 @@ func (r *PaymentRepo) GetByOrderID(ctx context.Context, orderID uint) (*model.Pa
 	return &payment, nil
 }
 
+func (r *PaymentRepo) GetByOrderIDForUpdate(ctx context.Context, orderID uint) (*model.Payment, error) {
+	var payment model.Payment
+	if err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("order_id = ?", orderID).First(&payment).Error; err != nil {
+		return nil, err
+	}
+	return &payment, nil
+}
+
 // UpdateAmountIfPending 更新支付金额，仅在待支付状态下生效。
 func (r *PaymentRepo) UpdateAmountIfPending(ctx context.Context, orderID uint, amountCents int64) (int64, error) {
 	tx := r.db.WithContext(ctx).Model(&model.Payment{}).
@@ -83,5 +92,17 @@ func (r *PaymentRepo) UpdateStatusByPaymentIDIfMatch(ctx context.Context, paymen
 	}
 
 	tx := r.db.WithContext(ctx).Model(&model.Payment{}).Where("payment_id = ? AND status = ?", paymentID, fromStatus).Updates(updates)
+	return tx.RowsAffected, tx.Error
+}
+
+func (r *PaymentRepo) UpdateStatusByOrderIDIfMatch(ctx context.Context, orderID uint, fromStatus model.PaymentStatus, toStatus model.PaymentStatus, notifyData string) (int64, error) {
+	updates := map[string]any{
+		"status":     toStatus,
+		"updated_at": time.Now(),
+	}
+	if notifyData != "" {
+		updates["notify_data"] = notifyData
+	}
+	tx := r.db.WithContext(ctx).Model(&model.Payment{}).Where("order_id = ? AND status = ?", orderID, fromStatus).Updates(updates)
 	return tx.RowsAffected, tx.Error
 }

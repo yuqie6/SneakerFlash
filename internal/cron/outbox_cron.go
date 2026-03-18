@@ -4,6 +4,7 @@ import (
 	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/infra/kafka"
 	"SneakerFlash/internal/model"
+	"SneakerFlash/internal/pkg/breaker"
 	"SneakerFlash/internal/repository"
 	"context"
 	"log/slog"
@@ -93,20 +94,28 @@ func (c *OutboxCron) compensate() {
 func (c *OutboxCron) processMessage(ctx context.Context, msg *model.OutboxMessage) {
 	// 检查是否达到最大重试次数
 	if msg.RetryCount >= c.maxRetries {
-		slog.Warn("消息达到最大重试次数，标记为失败",
+		slog.Warn("消息达到最大重试次数，准备转入终态处理",
 			slog.Uint64("msg_id", uint64(msg.ID)),
 			slog.Int("retry_count", msg.RetryCount))
-
-		if err := c.outboxRepo.MarkFailed(ctx, msg.ID, "达到最大重试次数"); err != nil {
-			slog.Error("标记消息失败状态失败", slog.Uint64("msg_id", uint64(msg.ID)), slog.Any("error", err))
-		}
 
 		// 投递到死信队列
 		if c.cfg.DLQTopic != "" {
 			dlqMsg := kafka.NewDLQMessage(msg.Topic, []byte(msg.Payload), msg.RetryCount, "达到最大重试次数")
-			if err := kafka.SendToDLQ(c.cfg.DLQTopic, dlqMsg); err != nil {
-				slog.Error("投递死信队列失败", slog.Uint64("msg_id", uint64(msg.ID)), slog.Any("error", err))
+			if !breaker.Default.Allow("kafka_producer") {
+				slog.Warn("Kafka 熔断开启，保留 pending 状态等待后续 DLQ 重试", slog.Uint64("msg_id", uint64(msg.ID)))
+				return
 			}
+			if err := kafka.SendToDLQ(c.cfg.DLQTopic, dlqMsg); err != nil {
+				breaker.Default.ReportFailure("kafka_producer")
+				slog.Error("投递死信队列失败，保留 pending 状态", slog.Uint64("msg_id", uint64(msg.ID)), slog.Any("error", err))
+				return
+			} else {
+				breaker.Default.ReportSuccess("kafka_producer")
+			}
+		}
+		if err := c.outboxRepo.MarkFailed(ctx, msg.ID, "达到最大重试次数"); err != nil {
+			slog.Error("标记消息失败状态失败", slog.Uint64("msg_id", uint64(msg.ID)), slog.Any("error", err))
+			return
 		}
 		return
 	}
@@ -116,7 +125,12 @@ func (c *OutboxCron) processMessage(ctx context.Context, msg *model.OutboxMessag
 		slog.Uint64("msg_id", uint64(msg.ID)),
 		slog.Int("retry_count", msg.RetryCount))
 
+	if !breaker.Default.Allow("kafka_producer") {
+		slog.Warn("Kafka 熔断开启，跳过即时补偿发送", slog.Uint64("msg_id", uint64(msg.ID)))
+		return
+	}
 	if err := kafka.Send(msg.Topic, msg.Payload); err != nil {
+		breaker.Default.ReportFailure("kafka_producer")
 		slog.Warn("消息发送失败，稍后重试",
 			slog.Uint64("msg_id", uint64(msg.ID)),
 			slog.Any("error", err))
@@ -126,6 +140,7 @@ func (c *OutboxCron) processMessage(ctx context.Context, msg *model.OutboxMessag
 		}
 		return
 	}
+	breaker.Default.ReportSuccess("kafka_producer")
 
 	// 发送成功，标记为已发送
 	if err := c.outboxRepo.MarkSent(ctx, msg.ID); err != nil {

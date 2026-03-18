@@ -3,7 +3,7 @@
 ## 结论
 - **P0：已完成**。接口规范、JWT + refresh token、商品发布校验、Redis 预热回滚、分环境配置均已落地。
 - **P1：已基本完成**。订单查询、支付回调、接口级/热点参数限流、黑灰名单、Prometheus 指标、结构化日志、VIP/优惠券、Outbox + DLQ 已具备可用实现。
-- **P2：部分完成**。管理后台和消息补偿已落地；熔断降级、优雅停机、未支付自动取消、实时推送、审计日志、细粒度 RBAC 仍未完成。
+- **P2：已推进到可用基线**。轻量熔断、优雅停机、未支付自动取消、SSE 实时推送、审计日志、资源级 RBAC 已落地；告警模板与更深的高可用治理仍待补强。
 
 ## P0：接口稳定与基础安全
 ### 已完成
@@ -15,7 +15,7 @@
 2. 鉴权
    - 已实现 access token + refresh token
    - JWT 中间件统一注入 `userID`、`username`、`role`
-   - 管理员接口基于 `AdminAuth` 做角色校验
+   - 管理员接口基于 `AdminAuth + AdminResourceAuth` 做角色和资源校验
 
 3. 商品与库存
    - 发布时校验开始时间、结束时间、价格和库存
@@ -72,39 +72,39 @@
    - 秒杀入口先写 Outbox，再异步发 Kafka
    - Worker 侧与补偿任务均已支持失败重试和 DLQ
 
-2. 管理后台
-   - 已具备统计、用户、订单、商品、优惠券、风控名单管理接口
-   - 前端管理页也已接入对应路由与页面
-
-### 未完成
-1. 熔断降级
-   - 未发现 DB / Redis / Kafka 级别的熔断器实现
-
 2. 优雅停机
-   - `cmd/api` 仍直接 `Run()`，`cmd/worker` 仍直接启动 consumer，未接入信号处理与优雅退出流程
+   - API 已接入 `SIGINT` / `SIGTERM` 优雅退出，按 HTTP -> Kafka -> Redis -> DB 顺序收口
+   - Worker 已接入信号处理，会先停 cron、再退出 consumer、最后关闭底层连接
 
-3. 未支付订单自动取消
-   - 未发现 15 分钟自动取消订单并回滚库存的任务或延迟队列实现
+3. 自动取消与实时同步
+   - Worker 已实现 15 分钟未支付订单自动取消，并回补库存、释放用户标记和优惠券
+   - 已新增 SSE 订单状态 / 商品库存推送；前端保留轮询兜底
 
-4. 实时推送
-   - 未发现 WebSocket / SSE 库存与订单状态推送实现
+4. 数据安全与治理
+   - 后台已支持资源级 RBAC：`admin`、`ops_admin`、`risk_admin`、`coupon_admin`、`audit_admin`
+   - 已新增审计日志模型与 `/admin/audit` 查询接口，优惠券和风控名单操作会落审计
 
-5. 数据安全与治理
-   - 目前只有 `role=admin` 的单级管理员模型，尚未形成细粒度 RBAC
-   - 未发现订单/库存变更等审计日志模型与查询链路
+5. 轻量熔断降级
+   - 已对 Redis 秒杀入口与 Kafka Producer 即时发送补入轻量熔断，指标会暴露状态切换与拒绝次数
+
+### 仍需补强
+- 轻量熔断目前主要覆盖 Redis / Kafka Producer，尚未扩展到更细粒度的 DB / consumer 依赖点
+- 监控面板样例、告警阈值和标准化告警策略仍主要停留在运维基线层面
+- SSE 目前是单实例内存广播模型，适合作为体验增强，不适合作为多实例事实通道
 
 ## 当前接口清单（与实现一致）
 - 认证：`POST /register`、`POST /login`、`POST /refresh`
 - 用户：`GET /profile`、`PUT /profile`、`POST /upload`
+- 推送：`GET /stream/orders/:id`、`GET /stream/products/:id`
 - 商品：`GET /products`、`GET /product/:id`、`POST /products`、`PUT /products/:id`、`DELETE /products/:id`、`GET /products/mine`
 - 秒杀：`POST /seckill`
 - 订单：`GET /orders`、`GET /orders/:id`、`GET /orders/poll/:order_num`、`POST /orders/:id/apply-coupon`
 - 支付：`POST /payment/callback`
 - VIP：`GET /vip/profile`、`POST /vip/purchase`
 - 优惠券：`GET /coupons/mine`、`POST /coupons/purchase`
-- 管理后台：`GET /admin/stats`、`GET /admin/users`、`GET /admin/orders`、`GET /admin/products`、`GET /admin/coupons`、`POST /admin/coupons`、`PUT /admin/coupons/:id`、`DELETE /admin/coupons/:id`、`GET/POST/DELETE /admin/risk/blacklist|graylist`
+- 管理后台：`GET /admin/stats`、`GET /admin/users`、`GET /admin/orders`、`GET /admin/products`、`GET /admin/coupons`、`POST /admin/coupons`、`PUT /admin/coupons/:id`、`DELETE /admin/coupons/:id`、`GET/POST/DELETE /admin/risk/blacklist|graylist`、`GET /admin/audit`
 
 ## 下一阶段建议
-1. 先补 P2 中最影响稳定性的三项：优雅停机、未支付订单自动取消、熔断降级。
-2. 再完善运营侧能力：告警模板、审计日志、细粒度 RBAC。
-3. 实时推送建议最后做，避免在核心一致性链路未完全收口前引入额外复杂度。
+1. 先补监控面板样例、告警阈值和运维模板，让当前 P2 基线真正可观测。
+2. 再决定是否把熔断和 SSE 从单实例能力扩展到多实例场景。
+3. 若继续演进后台治理，再从“资源级权限”细化到“动作级权限”。

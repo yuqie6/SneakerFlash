@@ -103,6 +103,7 @@ func MakeMigrate() {
 		&model.UserCoupon{},
 		&model.PaidVIP{},
 		&model.OutboxMessage{},
+		&model.AuditLog{},
 	)
 
 	if err != nil {
@@ -111,4 +112,15 @@ func MakeMigrate() {
 	}
 
 	slog.Info("数据库迁移成功")
+}
+
+func Close() error {
+	if DB == nil {
+		return nil
+	}
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
 }

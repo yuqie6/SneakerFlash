@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
@@ -16,6 +17,19 @@ import (
 // UserService 用户服务，处理注册、登录、Token 刷新。
 type UserService struct {
 	repo *repository.UserRepo
+}
+
+type UserProfile struct {
+	ID              uint      `json:"id"`
+	Username        string    `json:"username"`
+	Balance         float64   `json:"balance"`
+	Avatar          string    `json:"avatar"`
+	TotalSpentCents int64     `json:"total_spent_cents"`
+	GrowthLevel     int       `json:"growth_level"`
+	Role            string    `json:"role"`
+	Permissions     []string  `json:"permissions,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 var (
@@ -76,10 +90,7 @@ func (s *UserService) Login(ctx context.Context, username, password string) (str
 	}
 
 	// 签发 token
-	role := user.Role
-	if role == "" {
-		role = model.UserRoleUser
-	}
+	role := model.NormalizeUserRole(user.Role)
 	access, refresh, err := utils.GenerateTokens(user.ID, username, role)
 	if err != nil {
 		return "", "", err
@@ -89,11 +100,27 @@ func (s *UserService) Login(ctx context.Context, username, password string) (str
 }
 
 // GetProfile 查询用户信息。
-func (s *UserService) GetProfile(ctx context.Context, userID uint) (*model.User, error) {
+func (s *UserService) GetProfile(ctx context.Context, userID uint) (*UserProfile, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	return s.repo.GetByID(ctx, userID)
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	role := model.NormalizeUserRole(user.Role)
+	return &UserProfile{
+		ID:              user.ID,
+		Username:        user.Username,
+		Balance:         user.Balance,
+		Avatar:          user.Avatar,
+		TotalSpentCents: user.TotalSpentCents,
+		GrowthLevel:     user.GrowthLevel,
+		Role:            role,
+		Permissions:     model.PermissionsForRole(role),
+		CreatedAt:       user.CreatedAt,
+		UpdatedAt:       user.UpdatedAt,
+	}, nil
 }
 
 // Refresh 使用 refresh token 续签新的 access token。
@@ -119,10 +146,7 @@ func (s *UserService) Refresh(ctx context.Context, refreshToken string) (string,
 		}
 		return "", err
 	}
-	role := user.Role
-	if role == "" {
-		role = model.UserRoleUser
-	}
+	role := model.NormalizeUserRole(user.Role)
 	access, _, err := utils.GenerateTokens(user.ID, user.Username, role)
 	if err != nil {
 		return "", fmt.Errorf("生成 token 失败: %w", err)
@@ -131,7 +155,7 @@ func (s *UserService) Refresh(ctx context.Context, refreshToken string) (string,
 }
 
 // UpdateProfile 更新用户名或头像；用户名变更会先查重。
-func (s *UserService) UpdateProfile(ctx context.Context, userID uint, username, avatar *string) (*model.User, error) {
+func (s *UserService) UpdateProfile(ctx context.Context, userID uint, username, avatar *string) (*UserProfile, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
@@ -161,14 +185,14 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uint, username, 
 	}
 
 	if len(updates) == 0 {
-		return user, nil
+		return s.GetProfile(ctx, userID)
 	}
 
 	if err := s.repo.UpdateProfile(ctx, userID, updates); err != nil {
 		return nil, err
 	}
 
-	return user, nil
+	return s.GetProfile(ctx, userID)
 }
 
 // PromoteToAdmin 将指定用户提权为管理员；已是管理员时保持幂等。
@@ -190,7 +214,7 @@ func (s *UserService) PromoteToAdmin(ctx context.Context, username string) error
 		return err
 	}
 
-	if user.Role == model.UserRoleAdmin {
+	if model.IsAdminRole(user.Role) {
 		return nil
 	}
 

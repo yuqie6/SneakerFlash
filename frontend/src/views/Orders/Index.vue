@@ -63,6 +63,7 @@ const statusText = (s: number) => {
     case 0: return "待支付"
     case 1: return "已支付"
     case 2: return "支付失败"
+    case 3: return "已取消"
     default: return "未知"
   }
 }
@@ -70,6 +71,7 @@ const statusTone = (s: number) => {
   switch (s) {
     case 0: return "text-[#1C1C1C]/60"
     case 1: return "text-[#1C1C1C]"
+    case 3: return "text-[#1C1C1C]/50"
     default: return "text-[#1C1C1C]/30"
   }
 }
@@ -94,6 +96,7 @@ onMounted(fetchOrders)
               { label: '待支付', value: '0' },
               { label: '已支付', value: '1' },
               { label: '失败', value: '2' },
+              { label: '已取消', value: '3' },
             ]"
             :key="tab.value"
             class="hover-underline pb-0.5 transition-colors"

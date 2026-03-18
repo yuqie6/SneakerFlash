@@ -1,8 +1,10 @@
 import axios, { AxiosHeaders, type InternalAxiosRequestConfig } from "axios"
 import { toast } from "vue-sonner"
 
+export const apiBaseURL = import.meta.env.VITE_API_BASE_URL || "/api/v1"
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
+  baseURL: apiBaseURL,
   timeout: 10000,
 })
 
@@ -145,4 +147,13 @@ export function resolveAssetUrl(src: string | undefined | null) {
   // 相对路径直接返回（由Vite代理处理）
   if (src.startsWith("/")) return src
   return `/${src}`
+}
+
+export function buildStreamUrl(path: string, accessToken?: string) {
+  const base = apiBaseURL.startsWith("http")
+    ? apiBaseURL
+    : `${window.location.origin}${apiBaseURL.startsWith("/") ? apiBaseURL : `/${apiBaseURL}`}`
+  const url = new URL(`${base}${path.startsWith("/") ? path : `/${path}`}`)
+  if (accessToken) url.searchParams.set("access_token", accessToken)
+  return url.toString()
 }

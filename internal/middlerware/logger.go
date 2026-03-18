@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"runtime/debug"
 	"time"
 
@@ -18,7 +19,7 @@ func SlogMiddlerware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startTime := time.Now()
 		path := c.Request.URL.Path
-		query := c.Request.URL.RawQuery
+		query := sanitizeQuery(c.Request.URL.Query())
 		requestID := generateRequestID()
 
 		ctx := logger.ContextWithAttrs(
@@ -68,6 +69,25 @@ func SlogMiddlerware() gin.HandlerFunc {
 
 		slog.Default().LogAttrs(ctx, level, "HTTP request", attrs...)
 	}
+}
+
+func sanitizeQuery(values url.Values) string {
+	if len(values) == 0 {
+		return ""
+	}
+
+	sanitized := make(url.Values, len(values))
+	for key, items := range values {
+		cp := make([]string, len(items))
+		copy(cp, items)
+		sanitized[key] = cp
+	}
+	for _, key := range []string{"access_token", "token"} {
+		if sanitized.Has(key) {
+			sanitized.Set(key, "REDACTED")
+		}
+	}
+	return sanitized.Encode()
 }
 
 func generateRequestID() string {

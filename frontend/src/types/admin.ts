@@ -36,3 +36,19 @@ export interface RiskList {
   ip: string[]
   user: string[]
 }
+
+export interface AuditLog {
+  id: number
+  actor_id: number
+  actor_name: string
+  actor_role: string
+  resource: string
+  action: string
+  resource_id: string
+  request_path: string
+  request_ip: string
+  request_body?: string
+  result: string
+  error_message?: string
+  created_at: string
+}

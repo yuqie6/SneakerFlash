@@ -4,10 +4,12 @@ import (
 	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/app"
 	"SneakerFlash/internal/pkg/e"
+	"SneakerFlash/internal/pkg/logger"
 	"SneakerFlash/internal/repository"
 	"SneakerFlash/internal/service"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -120,7 +122,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
-// @Param status query int false "订单状态：0未支付 1已支付 2失败"
+// @Param status query int false "订单状态：0未支付 1已支付 2失败 3已取消"
 // @Success 200 {object} app.Response{data=app.PageData}
 // @Failure 400 {object} app.Response "参数错误"
 // @Failure 401 {object} app.Response "未登录"
@@ -511,6 +513,21 @@ func (h *AdminHandler) changeRisk(c *gin.Context, action, resource string, fn fu
 	appG.Success(gin.H{"message": "ok"})
 }
 
+// ListAuditLogs 管理台审计日志列表
+// @Summary 审计日志列表
+// @Tags 管理后台
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Param actor_name query string false "操作者用户名"
+// @Param resource query string false "资源类型"
+// @Param action query string false "动作"
+// @Success 200 {object} app.Response{data=app.PageData}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/audit [get]
 func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 	appG := app.Gin{C: c}
 	page, pageSize, ok := parsePage(c)
@@ -540,23 +557,41 @@ func (h *AdminHandler) recordAudit(c *gin.Context, resource, action, resourceID 
 	userID, _ := c.Get("userID")
 	username, _ := c.Get("username")
 	role, _ := c.Get("role")
+	requestID, _ := c.Get("request_id")
+	actorID, okID := userID.(uint)
+	actorName, okName := username.(string)
+	actorRole, okRole := role.(string)
+	requestIDStr, _ := requestID.(string)
+	if !okID || !okName || !okRole {
+		slog.WarnContext(c.Request.Context(), "审计日志缺少操作者上下文", slog.String("resource", resource), slog.String("action", action))
+		return
+	}
 	result := "success"
 	if errMsg != "" {
 		result = "failed"
 	}
-	_ = h.auditSvc.Record(c.Request.Context(), service.AuditLogInput{
-		ActorID:      userID.(uint),
-		ActorName:    username.(string),
-		ActorRole:    role.(string),
+	if err := h.auditSvc.Record(c.Request.Context(), service.AuditLogInput{
+		ActorID:      actorID,
+		ActorName:    actorName,
+		ActorRole:    actorRole,
 		Resource:     resource,
 		Action:       action,
 		ResourceID:   resourceID,
+		RequestID:    requestIDStr,
 		RequestPath:  c.FullPath(),
 		RequestIP:    c.ClientIP(),
 		RequestBody:  body,
 		Result:       result,
 		ErrorMessage: errMsg,
-	})
+	}); err != nil {
+		slog.WarnContext(
+			logger.ContextWithAttrs(c.Request.Context(), slog.String("request_id", requestIDStr)),
+			"写入审计日志失败",
+			slog.String("resource", resource),
+			slog.String("action", action),
+			slog.Any("err", err),
+		)
+	}
 }
 
 func parsePage(c *gin.Context) (int, int, bool) {

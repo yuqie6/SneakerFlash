@@ -17,24 +17,14 @@ import (
 func JWTauth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		appG := app.Gin{C: ctx}
-		// 1. 获取 header 中的 authorization
-		authHeader := ctx.GetHeader("authorization")
-		if authHeader == "" {
-			appG.Error(http.StatusUnauthorized, e.UNAUTHORIZED)
+		tokenValue, err := resolveAccessToken(ctx)
+		if err != nil {
+			appG.ErrorMsg(http.StatusUnauthorized, e.UNAUTHORIZED, err.Error())
 			ctx.Abort()
 			return
 		}
 
-		// 2. 格式校验
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			appG.ErrorMsg(http.StatusUnauthorized, e.UNAUTHORIZED, "token 格式有误")
-			ctx.Abort()
-			return
-		}
-
-		// 解析 token
-		claims, err := utils.ParshToken(parts[1])
+		claims, err := utils.ParshToken(tokenValue)
 		if err != nil {
 			if errors.Is(err, jwt.ErrTokenExpired) {
 				appG.ErrorMsg(http.StatusUnauthorized, e.UNAUTHORIZED, "token 已过期")
@@ -53,12 +43,31 @@ func JWTauth() gin.HandlerFunc {
 		// 4. 存入用户信息到context
 		ctx.Set("userID", claims.UserID)
 		ctx.Set("username", claims.Username)
-		role := claims.Role
-		if role == "" {
-			role = model.UserRoleUser
-		}
+		role := model.NormalizeUserRole(claims.Role)
 		ctx.Set("role", role)
+		ctx.Set("permissions", model.PermissionsForRole(role))
 
 		ctx.Next()
 	}
+}
+
+func resolveAccessToken(ctx *gin.Context) (string, error) {
+	authHeader := ctx.GetHeader("authorization")
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			return "", errors.New("token 格式有误")
+		}
+		return parts[1], nil
+	}
+
+	if !strings.HasPrefix(ctx.FullPath(), "/api/v1/stream/") {
+		return "", errors.New("未提供 token")
+	}
+
+	tokenValue := strings.TrimSpace(ctx.Query("access_token"))
+	if tokenValue == "" {
+		return "", errors.New("未提供 token")
+	}
+	return tokenValue, nil
 }

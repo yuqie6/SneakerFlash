@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -83,6 +84,62 @@ func TestJWTauth(t *testing.T) {
 				t.Fatalf("role = %v, want admin", payload["role"])
 			}
 		})
+	}
+}
+
+func TestJWTauth_QueryTokenOnlyAllowedForStreamRoutes(t *testing.T) {
+	testutil.SetupTestConfig()
+	gin.SetMode(gin.TestMode)
+
+	validAccess, _, err := utils.GenerateTokens(42, "alice", "admin")
+	if err != nil {
+		t.Fatalf("GenerateTokens() error = %v", err)
+	}
+
+	router := gin.New()
+	router.GET("/api/v1/stream/orders/:id", JWTauth(), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	router.GET("/api/v1/profile", JWTauth(), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	streamReq := httptest.NewRequest(http.MethodGet, "/api/v1/stream/orders/1?access_token="+url.QueryEscape(validAccess), nil)
+	streamRec := httptest.NewRecorder()
+	router.ServeHTTP(streamRec, streamReq)
+	if streamRec.Code != http.StatusOK {
+		t.Fatalf("stream status = %d, want %d", streamRec.Code, http.StatusOK)
+	}
+
+	profileReq := httptest.NewRequest(http.MethodGet, "/api/v1/profile?access_token="+url.QueryEscape(validAccess), nil)
+	profileRec := httptest.NewRecorder()
+	router.ServeHTTP(profileRec, profileReq)
+	if profileRec.Code != http.StatusUnauthorized {
+		t.Fatalf("profile status = %d, want %d", profileRec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestSanitizeQuery(t *testing.T) {
+	values := url.Values{
+		"access_token": []string{"secret"},
+		"page":         []string{"1"},
+		"token":        []string{"another"},
+	}
+
+	got := sanitizeQuery(values)
+	parsed, err := url.ParseQuery(got)
+	if err != nil {
+		t.Fatalf("ParseQuery() error = %v", err)
+	}
+
+	if parsed.Get("access_token") != "REDACTED" {
+		t.Fatalf("access_token = %q, want REDACTED", parsed.Get("access_token"))
+	}
+	if parsed.Get("token") != "REDACTED" {
+		t.Fatalf("token = %q, want REDACTED", parsed.Get("token"))
+	}
+	if parsed.Get("page") != "1" {
+		t.Fatalf("page = %q, want 1", parsed.Get("page"))
 	}
 }
 

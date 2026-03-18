@@ -9,9 +9,10 @@ import (
 type OrderStatus int
 
 const (
-	OrderStatusUnpaid OrderStatus = 0
-	OrderStatusPaid   OrderStatus = 1
-	OrderStatusFailed OrderStatus = 2
+	OrderStatusUnpaid    OrderStatus = 0
+	OrderStatusPaid      OrderStatus = 1
+	OrderStatusFailed    OrderStatus = 2
+	OrderStatusCancelled OrderStatus = 3
 )
 
 type Order struct {
@@ -27,4 +28,13 @@ type Order struct {
 
 func (Order) TableName() string {
 	return "orders"
+}
+
+func ValidOrderStatus(status OrderStatus) bool {
+	switch status {
+	case OrderStatusUnpaid, OrderStatusPaid, OrderStatusFailed, OrderStatusCancelled:
+		return true
+	default:
+		return false
+	}
 }

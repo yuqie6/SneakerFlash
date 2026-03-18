@@ -54,6 +54,7 @@ func NewSQLiteDB(t *testing.T) *gorm.DB {
 		&model.UserCoupon{},
 		&model.PaidVIP{},
 		&model.OutboxMessage{},
+		&model.AuditLog{},
 	)
 	if err != nil {
 		t.Fatalf("migrate sqlite: %v", err)

@@ -11,7 +11,11 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	docs "SneakerFlash/docs"
 
@@ -54,8 +58,40 @@ func main() {
 	docs.SwaggerInfo.Version = "1.0"
 
 	r := server.NewHttpServer()
-	if err := r.Run(config.Conf.Server.Port); err != nil {
+	srv := &http.Server{
+		Addr:    config.Conf.Server.Port,
+		Handler: r,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	errCh := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case err := <-errCh:
 		slog.Error("启动失败", slog.Any("err", err))
 		os.Exit(1)
+	case <-ctx.Done():
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("HTTP 优雅停机失败", slog.Any("err", err))
+	}
+	if err := kafka.CloseProducer(); err != nil {
+		slog.Warn("关闭 Kafka 失败", slog.Any("err", err))
+	}
+	if err := redis.Close(); err != nil {
+		slog.Warn("关闭 Redis 失败", slog.Any("err", err))
+	}
+	if err := db.Close(); err != nil {
+		slog.Warn("关闭数据库失败", slog.Any("err", err))
 	}
 }

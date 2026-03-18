@@ -326,7 +326,7 @@
                     },
                     {
                         "type": "integer",
-                        "description": "订单状态：0未支付 1已支付 2失败",
+                        "description": "订单状态：0未支付 1已支付 2失败 3已取消",
                         "name": "status",
                         "in": "query"
                     }
@@ -1148,7 +1148,7 @@
                     },
                     {
                         "type": "integer",
-                        "description": "订单状态：0未支付 1已支付 2失败",
+                        "description": "订单状态：0未支付 1已支付 2失败 3已取消",
                         "name": "status",
                         "in": "query"
                     }
@@ -2297,6 +2297,178 @@
                     }
                 }
             }
+        },
+        "/admin/audit": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理后台"
+                ],
+                "summary": "审计日志列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "操作者用户名",
+                        "name": "actor_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "资源类型",
+                        "name": "resource",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "动作",
+                        "name": "action",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/app.PageData"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stream/orders/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "推送"
+                ],
+                "summary": "订阅订单状态推送",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "订单ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "access token",
+                        "name": "access_token",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE stream established"
+                    },
+                    "401": {
+                        "description": "未登录",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/stream/products/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "推送"
+                ],
+                "summary": "订阅商品库存推送",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "商品ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "access token",
+                        "name": "access_token",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE stream established"
+                    },
+                    "401": {
+                        "description": "未登录",
+                        "schema": {
+                            "$ref": "#/definitions/app.Response"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -2754,22 +2926,37 @@
         "handler.UserResponse": {
             "type": "object",
             "properties": {
-                "CreatedAt": {
-                    "type": "string"
-                },
-                "ID": {
+                "id": {
                     "type": "integer"
                 },
-                "UpdatedAt": {
-                    "type": "string"
-                },
-                "avatar": {
+                "username": {
                     "type": "string"
                 },
                 "balance": {
                     "type": "number"
                 },
-                "username": {
+                "avatar": {
+                    "type": "string"
+                },
+                "total_spent_cents": {
+                    "type": "integer"
+                },
+                "growth_level": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
@@ -3181,6 +3368,53 @@
                 "total_spent_cents": {
                     "description": "累计消费（分）",
                     "type": "integer"
+                }
+            }
+        },
+        "model.AuditLog": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "actor_id": {
+                    "type": "integer"
+                },
+                "actor_name": {
+                    "type": "string"
+                },
+                "actor_role": {
+                    "type": "string"
+                },
+                "resource": {
+                    "type": "string"
+                },
+                "action": {
+                    "type": "string"
+                },
+                "resource_id": {
+                    "type": "string"
+                },
+                "request_path": {
+                    "type": "string"
+                },
+                "request_ip": {
+                    "type": "string"
+                },
+                "request_body": {
+                    "type": "string"
+                },
+                "result": {
+                    "type": "string"
+                },
+                "error_message": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
                 }
             }
         }

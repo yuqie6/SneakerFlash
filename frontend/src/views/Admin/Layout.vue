@@ -1,18 +1,23 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import { RouterLink, RouterView, useRoute } from "vue-router"
+import { useUserStore } from "@/stores/userStore"
 import {
-  LayoutDashboard, Users, ShoppingCart, Ticket, Package, ShieldAlert, ArrowLeft,
+  LayoutDashboard, Users, ShoppingCart, Ticket, Package, ShieldAlert, ArrowLeft, ScrollText,
 } from "lucide-vue-next"
 
 const route = useRoute()
+const userStore = useUserStore()
 const nav = [
-  { to: "/admin", label: "数据概览", icon: LayoutDashboard, exact: true },
-  { to: "/admin/users", label: "用户管理", icon: Users },
-  { to: "/admin/orders", label: "订单管理", icon: ShoppingCart },
-  { to: "/admin/coupons", label: "优惠券", icon: Ticket },
-  { to: "/admin/products", label: "商品管理", icon: Package },
-  { to: "/admin/risk", label: "风控管理", icon: ShieldAlert },
+  { to: "/admin", label: "数据概览", icon: LayoutDashboard, exact: true, permission: "stats" },
+  { to: "/admin/users", label: "用户管理", icon: Users, permission: "users" },
+  { to: "/admin/orders", label: "订单管理", icon: ShoppingCart, permission: "orders" },
+  { to: "/admin/coupons", label: "优惠券", icon: Ticket, permission: "coupons" },
+  { to: "/admin/products", label: "商品管理", icon: Package, permission: "products" },
+  { to: "/admin/risk", label: "风控管理", icon: ShieldAlert, permission: "risk" },
+  { to: "/admin/audit", label: "审计日志", icon: ScrollText, permission: "audit" },
 ]
+const visibleNav = computed(() => nav.filter((item) => !item.permission || userStore.hasPermission(item.permission)))
 const isActive = (item: (typeof nav)[0]) => (item.exact ? route.path === item.to : route.path.startsWith(item.to) && (item.exact || item.to !== "/admin"))
 </script>
 
@@ -25,7 +30,7 @@ const isActive = (item: (typeof nav)[0]) => (item.exact ? route.path === item.to
       </div>
       <nav class="flex-1 space-y-0.5 p-3">
         <RouterLink
-          v-for="item in nav"
+          v-for="item in visibleNav"
           :key="item.to"
           :to="item.to"
           class="flex items-center gap-3 px-3 py-2.5 text-sm transition-colors"

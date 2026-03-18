@@ -7,8 +7,8 @@ import MagmaButton from "@/components/motion/MagmaButton.vue"
 
 const state = reactive({ items: [] as Order[], total: 0, page: 1, pageSize: 20, loading: false, error: "", status: "" })
 
-const statusText = (s: number) => { switch (s) { case 0: return "待支付"; case 1: return "已支付"; case 2: return "失败"; default: return "未知" } }
-const statusTone = (s: number) => { switch (s) { case 0: return "text-[#1C1C1C]/60"; case 1: return "text-[#1C1C1C]"; default: return "text-[#1C1C1C]/30" } }
+const statusText = (s: number) => { switch (s) { case 0: return "待支付"; case 1: return "已支付"; case 2: return "失败"; case 3: return "已取消"; default: return "未知" } }
+const statusTone = (s: number) => { switch (s) { case 0: return "text-[#1C1C1C]/60"; case 1: return "text-[#1C1C1C]"; case 3: return "text-[#1C1C1C]/50"; default: return "text-[#1C1C1C]/30" } }
 
 const fetchOrders = async () => {
   state.loading = true
@@ -33,7 +33,7 @@ onMounted(fetchOrders)
         <h1 class="font-serif text-2xl tracking-tight md:text-3xl">订单管理</h1>
       </div>
       <div class="flex gap-4 text-sm">
-        <button v-for="tab in [{ l: '全部', v: '' }, { l: '待支付', v: '0' }, { l: '已支付', v: '1' }, { l: '失败', v: '2' }]" :key="tab.v" class="hover-underline pb-0.5" :class="state.status === tab.v ? 'text-[#1C1C1C] font-medium' : 'text-[#1C1C1C]/40'" @click="onStatusChange(tab.v)">{{ tab.l }}</button>
+        <button v-for="tab in [{ l: '全部', v: '' }, { l: '待支付', v: '0' }, { l: '已支付', v: '1' }, { l: '失败', v: '2' }, { l: '已取消', v: '3' }]" :key="tab.v" class="hover-underline pb-0.5" :class="state.status === tab.v ? 'text-[#1C1C1C] font-medium' : 'text-[#1C1C1C]/40'" @click="onStatusChange(tab.v)">{{ tab.l }}</button>
       </div>
     </div>
 
