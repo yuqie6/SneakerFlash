@@ -1,123 +1,110 @@
-# 阶段路线图
+# 阶段路线图（审计于 2026-03-18）
 
-- **P0**：把现有接口稳定下来，补齐安全基础。
-- **P1**：做完订单支付、限流风控、监控、VIP 和优惠券。
-- **P2**：高可用、未支付自动取消、管理后台。
+## 结论
+- **P0：已完成**。接口规范、JWT + refresh token、商品发布校验、Redis 预热回滚、分环境配置均已落地。
+- **P1：已基本完成**。订单查询、支付回调、接口级/热点参数限流、黑灰名单、Prometheus 指标、结构化日志、VIP/优惠券、Outbox + DLQ 已具备可用实现。
+- **P2：部分完成**。管理后台和消息补偿已落地；熔断降级、优雅停机、未支付自动取消、实时推送、审计日志、细粒度 RBAC 仍未完成。
 
 ## P0：接口稳定与基础安全
-
-1) 接口规范
+### 已完成
+1. 接口规范
    - 统一响应格式 `{ code, msg, data }`
-   - 定义错误码：401 未登录、429 限流、5xx 系统错误、7xx 风控拦截
-   - CORS 配置
+   - 已定义未登录、限流、业务错误和风控错误码
+   - CORS 已在 HTTP Server 中统一配置
 
-2) 鉴权
-   - JWT 短 token + refresh token
-   - 中间件统一注入 userID/username
-   - 密码策略（可选）
+2. 鉴权
+   - 已实现 access token + refresh token
+   - JWT 中间件统一注入 `userID`、`username`、`role`
+   - 管理员接口基于 `AdminAuth` 做角色校验
 
-3) 商品与库存
-   - 发布校验：开始时间、库存、价格
-   - 预热失败时回滚
+3. 商品与库存
+   - 发布时校验开始时间、结束时间、价格和库存
+   - 商品创建后会把库存预热到 Redis，预热失败会回滚数据库记录
+   - 商品详情优先读取缓存，并以 Redis 实时库存为准
 
-4) 秒杀
-   - Lua 脚本防重复购买（已有）
-   - Kafka 发送失败重试，或写入 Outbox 由定时任务补发
-   - Worker 建单事务失败时回滚 Redis 库存
+4. 秒杀
+   - Redis Lua 已实现判重 + 扣库存原子操作
+   - 秒杀入口已写 Outbox，异步发送 Kafka
+   - Worker 建单失败时会回滚 Redis 库存与用户标记
 
-5) 配置
-   - dev/stage/prod 分环境配置
-   - 敏感信息通过环境变量注入
+5. 配置
+   - 已统一为 `SNEAKERFLASH_CONFIG -> config.<env>.local.yml`
+   - 已提供 dev/prod example 与 `.env.*.example`
+   - Viper 已启用环境变量覆盖
 
 ## P1：订单支付、限流、监控、VIP 与优惠券
+### 已完成
+1. 订单与支付
+   - `GET /orders`、`GET /orders/:id`、`GET /orders/poll/:order_num` 已实现
+   - 支付回调 `POST /payment/callback` 已实现幂等状态推进
+   - `order_num`、`payment_id`、订单状态条件更新已用于防重复处理
+   - 支付前支持 `POST /orders/:id/apply-coupon`
 
-1) 订单与支付
-   - `GET /orders`（分页、按状态筛选）、`GET /orders/:id`
-   - 生成支付单，支付回调写入数据库（待支付 → 已支付/失败）
-   - 用 order_num + 用户 ID 防重复
+2. 限流与风控
+   - 登录、支付、秒杀已支持接口级限流
+   - `product_id` 已支持热点参数限流
+   - 黑名单 / 灰名单已支持按用户和 IP 管控，并具备管理端接口
 
-2) 限流与风控
-   - 接口级限流：登录、秒杀、支付各自独立的令牌桶
-   - 热点参数限流：按 product_id 限制 QPS，防单个商品打爆
-   - 用户/IP 黑名单，异常请求返回 429
+3. 监控
+   - 已暴露 `/metrics`
+   - 已接入 `slog + lumberjack`
+   - Dev/Prod Compose 已包含 Prometheus + Grafana 基线
+   - 健康检查已提供 `/health`、`/ready`
 
-3) 监控
-   - 指标：QPS、成功率、P95/P99 延迟、库存命中率、Kafka 消费延迟
-   - 日志：slog + lumberjack，结构化输出，带 trace-id 和 uid
-   - 告警：Kafka 消费积压、Redis 异常、DB 慢查询、错误率超阈值（Prometheus + Grafana）
+4. 性能与可靠性
+   - Redis 连接池、超时、Kafka consumer offset 策略已可配置
+   - Outbox 补偿、消费者重试、DLQ 已实现
+   - 商品缓存已包含随机 TTL 与空值缓存策略
+   - MySQL 索引与慢查询阈值已有配置约束
 
-4) 性能
-   - Redis 连接池和超时配置
-   - MySQL 索引（product_id、user_id、order_num）
-   - 队列消费失败重试 + 死信主题
-   - 缓存过期时间加随机偏移，防止大量 key 同时过期
-   - 对不存在的数据缓存空值，防止反复查数据库
+5. VIP 与优惠券
+   - 成长等级基于累计实付金额
+   - 付费 VIP 已实现，并按成长等级/付费等级取较高值生效
+   - 优惠券已支持满减、折扣、购买、月度发放、订单核销与释放
+   - 管理后台已支持优惠券模板 CRUD
 
-5) VIP 与优惠券
-   - 成长等级按累计实付金额计算，永久生效
-   - 可购买付费 VIP，有效等级取成长等级和付费 VIP 中较高的
-   - 优惠券支持满减和折扣，按月发放，VIP 等级越高配额越多
-   - 普通用户也可以购买优惠券
-   - 优惠券当月有效，每个订单只能用一张
-   - 成长等级分层（按累计实付元）：L1 0–999 / L2 1,000–4,999 / L3 5,000–19,999 / L4 20,000+
+### 仍需补强
+- 监控面板样例、告警阈值和标准化告警策略仍主要停留在运维基线层面，尚未形成成套文档与配置模板。
 
 ## P2：高可用与运营
+### 已完成
+1. 消息补偿
+   - 秒杀入口先写 Outbox，再异步发 Kafka
+   - Worker 侧与补偿任务均已支持失败重试和 DLQ
 
-1) 熔断降级
-   - DB/Redis/Kafka 响应慢时自动熔断，返回"系统繁忙"
+2. 管理后台
+   - 已具备统计、用户、订单、商品、优惠券、风控名单管理接口
+   - 前端管理页也已接入对应路由与页面
 
-2) 优雅停机
-   - API 和 Worker 收到信号后停止接受新请求，等当前请求处理完再退出
-   - Kafka consumer 关闭前确认 offset
+### 未完成
+1. 熔断降级
+   - 未发现 DB / Redis / Kafka 级别的熔断器实现
 
-3) 未支付订单自动取消
-   - 15 分钟未支付的订单自动取消，回滚库存
-   - 可用 Redis ZSet 或 RabbitMQ 延时队列实现
+2. 优雅停机
+   - `cmd/api` 仍直接 `Run()`，`cmd/worker` 仍直接启动 consumer，未接入信号处理与优雅退出流程
 
-4) 消息补偿
-   - 秒杀成功后先写本地消息表（状态=待发送），定时任务扫描重试 Kafka
+3. 未支付订单自动取消
+   - 未发现 15 分钟自动取消订单并回滚库存的任务或延迟队列实现
 
-5) 实时推送
-   - WebSocket/SSE 推送库存变化和订单状态
+4. 实时推送
+   - 未发现 WebSocket / SSE 库存与订单状态推送实现
 
-6) 管理后台
-   - 商品、库存、订单、风控看板
-   - 权限分级（RBAC）
+5. 数据安全与治理
+   - 目前只有 `role=admin` 的单级管理员模型，尚未形成细粒度 RBAC
+   - 未发现订单/库存变更等审计日志模型与查询链路
 
-7) 数据安全
-   - 审计日志（发布、库存变更、订单状态变更）
-   - 少存个人敏感信息，密钥统一管理
+## 当前接口清单（与实现一致）
+- 认证：`POST /register`、`POST /login`、`POST /refresh`
+- 用户：`GET /profile`、`PUT /profile`、`POST /upload`
+- 商品：`GET /products`、`GET /product/:id`、`POST /products`、`PUT /products/:id`、`DELETE /products/:id`、`GET /products/mine`
+- 秒杀：`POST /seckill`
+- 订单：`GET /orders`、`GET /orders/:id`、`GET /orders/poll/:order_num`、`POST /orders/:id/apply-coupon`
+- 支付：`POST /payment/callback`
+- VIP：`GET /vip/profile`、`POST /vip/purchase`
+- 优惠券：`GET /coupons/mine`、`POST /coupons/purchase`
+- 管理后台：`GET /admin/stats`、`GET /admin/users`、`GET /admin/orders`、`GET /admin/products`、`GET /admin/coupons`、`POST /admin/coupons`、`PUT /admin/coupons/:id`、`DELETE /admin/coupons/:id`、`GET/POST/DELETE /admin/risk/blacklist|graylist`
 
-## 接口清单
-
-现有：
-- `POST /register`、`POST /login`、`GET /profile`
-- `GET /products`、`GET /product/:id`、`POST /products`（需登录）
-- `POST /seckill`（需登录）
-
-P1 新增：
-- `GET /orders`、`GET /orders/:id`
-- `POST /orders/:id/pay` 或 `/pay`
-- `POST /payment/callback`（需签名校验）
-- 健康检查（可选）
-
-## 数据模型
-
-- User：`id, username, password_hash, balance, created_at, updated_at`
-- Product：`id, name, price, stock, start_time, image, created_at, updated_at`
-- Order：`id, user_id, product_id, order_num, status (0/1/2), created_at, updated_at`
-- 可扩展：支付单、风控记录、库存日志、本地消息表
-
-## 技术备忘
-
-- Redis Lua 原子扣库存 + 用户去重
-- Kafka：消费失败重试 + 死信主题 + 消费组监控；发送失败走本地消息表补偿
-- MySQL：短事务，索引优化；订单创建和库存扣减在同一个事务里
-- 配置：Viper + 环境变量覆盖；敏感信息不入代码
-- HTTP：CORS、gzip、合理超时；日志带 trace-id
-
-## 建议交付顺序
-
-1. **P0**：统一响应格式和错误码 → 鉴权 → 发布校验 → CORS 和分环境配置
-2. **P1**：订单支付 → 限流风控 → 监控（slog + Prometheus + Grafana）→ 消费重试和死信
-3. **P2**：熔断降级 → 未支付自动取消 → 消息补偿 → 优雅停机 → 实时推送 → 管理后台
+## 下一阶段建议
+1. 先补 P2 中最影响稳定性的三项：优雅停机、未支付订单自动取消、熔断降级。
+2. 再完善运营侧能力：告警模板、审计日志、细粒度 RBAC。
+3. 实时推送建议最后做，避免在核心一致性链路未完全收口前引入额外复杂度。

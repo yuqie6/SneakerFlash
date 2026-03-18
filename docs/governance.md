@@ -10,15 +10,18 @@
 | --- | --- | --- |
 | L0 | `README.md` | 项目总览、快速启动、全局导航 |
 | L1 | `docs/README.md` | 文档中心入口 |
-| L2 | 专题文档 | 架构、开发、配置、运维、排障 |
+| L2 | 专题文档 | 架构、开发、配置、运维、排障、测试、前端实现 |
 | L3 | 契约文档 | `backend-api.md`、`swagger.*` |
+| L4 | `docs/archive/*` | 历史方案、归档材料 |
 
 ## 更新规则
 - 接口变化：更新 `docs/backend-api.md` 与 Swagger
 - 配置变化：更新 `docs/configuration.md`
 - 启动方式变化：更新 `README.md`、`docs/development.md`
 - 运维方式变化：更新 `docs/operations.md`、`docs/troubleshooting.md`
-- 重大结构变化：更新 `docs/architecture.md`
+- 前端结构或交互变化：更新 `docs/frontend-plan.md`
+- 阶段完成度变化：更新 `docs/plan.md`
+- 失效但需保留背景的文档：移动到 `docs/archive/` 并在索引中登记
 
 ## 评审清单
 - 文档是否有唯一入口
@@ -26,6 +29,7 @@
 - 是否与当前代码行为一致
 - 是否覆盖了失败场景与排障动作
 - 是否明确了责任边界
+- 历史方案是否已经从主导航移除
 
 ## 变更记录
 | 日期 | 负责人 | 内容摘要 | 状态 |
@@ -35,9 +39,9 @@
 | 2026-03-18 | Codex | 拆分开发/单机生产 Compose 与应用配置样例，并补充 Kafka 单机基线说明 | 完成 |
 | 2026-03-18 | Codex | 统一 dev/prod/local/example 命名规则，收敛 Makefile 启动入口与实际读取流程 | 完成 |
 | 2026-03-18 | Codex | 删除旧兼容配置入口并新增 make help，统一单人开发工作流 | 完成 |
+| 2026-03-18 | Codex | 审计阶段路线图与实现差异，更新 `plan.md`、`backend-api.md`、`frontend-plan.md`、`testing.md` 并归档 `admin-backend-plan.md` | 完成 |
 
 ## 待补事项
-- 对齐 `docs/backend-api.md` 与 VIP / 优惠券实际实现
 - 增加多节点部署文档与高可用 Kafka 基线
 - 增加监控面板样例与告警阈值
-- 增加核心链路测试策略说明
+- 补充 P2 能力落地后的运维与测试说明

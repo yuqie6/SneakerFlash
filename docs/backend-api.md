@@ -1,107 +1,131 @@
 # SneakerFlash 后端接口文档（当前实现）
 
 - 基础地址：业务接口 `http://localhost:8000/api/v1`
-- 探针接口：`http://localhost:8000/health`、`http://localhost:8000/ready`
+- 探针接口：`http://localhost:8000/health`、`http://localhost:8000/ready`、`http://localhost:8000/metrics`
 - 鉴权：受保护接口需在 Header 携带 `Authorization: Bearer <access_token>`
-- 统一返回：`{ "code": number, "msg": string, "data"?: any }`；`code=200` 表示业务成功。
+- 统一返回：`{ "code": number, "msg": string, "data"?: any }`；`code=200` 表示业务成功
 
 ## 系统
 - `GET /health`（根路径，非 `/api/v1`）
-  快速存活检查，仅确认 HTTP 服务进程可响应。  
-  成功：`code=200`，`data={"status":"ok","service":"SneakerFlash","timestamp":RFC3339}`。
+  存活检查。成功：`data={"status":"ok","service":"SneakerFlash","timestamp":RFC3339}`。
 - `GET /ready`（根路径，非 `/api/v1`）
-  就绪检查，校验 MySQL、Redis 和 Kafka Producer 初始化状态。  
-  成功：`code=200`，`data={"status":"ready","checks":{"database":{"status":"up"},"redis":{"status":"up"},"kafka":{"status":"up"}}}`。  
-  未就绪：HTTP `503`，`msg="服务未就绪"`，并在 `data.checks` 返回失败组件明细。
+  就绪检查，覆盖 MySQL、Redis、Kafka Producer。未就绪返回 HTTP `503`。
+- `GET /metrics`（根路径，非 `/api/v1`）
+  Prometheus 文本指标。
 
 ## 认证
-- `POST /register`  
-  Body：`{ "user_name": string, "user_password": string }`  
-  成功：`code=200`，`data={"message":"注册成功"}`；已存在返回 `code=10001`。
-- `POST /login`  
-  Body 同上。  
-  成功：`code=200`，`data={ "access_token", "refresh_token", "expires_in" }`。  
-  用户不存在/密码错误返回 `401` + 对应业务码。
-- `POST /refresh`  
-  Body：`{ "refresh_token": string }`  
-  成功：`code=200`，`data={ "access_token", "expires_in" }`。
+- `POST /register`
+  Body：`{ "user_name": string, "user_password": string }`
+  成功：`data={"message":"注册成功"}`；重名返回 `code=10001`。
+- `POST /login`
+  Body 同上。
+  成功：`data={ "access_token", "refresh_token", "expires_in" }`。
+- `POST /refresh`
+  Body：`{ "refresh_token": string }`
+  成功：`data={ "access_token", "expires_in" }`。
 
-## 用户
-- `GET /profile`（鉴权）  
-  成功：`data=User`，当前会返回 `total_spent_cents`、`growth_level`、`role`。
-- `PUT /profile`（鉴权）  
-  Body：可选 `user_name`, `avatar`；至少传一项。  
-  成功：`data=User`；重名返回 `code=10001`。
-
-## 上传
-- `POST /upload`（鉴权）`multipart/form-data`，字段 `file`；成功返回 `data={ "url": "<path>" }`。
+## 用户与上传
+- `GET /profile`（鉴权）
+  成功：`data=User`，包含 `total_spent_cents`、`growth_level`、`role`。
+- `PUT /profile`（鉴权）
+  Body：`{ "user_name"?: string, "avatar"?: string }`；至少传一项。
+- `POST /upload`（鉴权）
+  `multipart/form-data`，字段 `file`；成功：`data={ "url": string }`。
 
 ## 商品
-- `GET /products?page&size`  
-  成功：`data={ items: Product[], total, page }`。
-- `GET /product/:id`  
+- `GET /products?page=1&page_size=10`
+  成功：`data={ list: Product[], total, page, page_size }`。
+- `GET /product/:id`
   成功：`data=Product`；不存在返回 `404` + `code=20001`。
-- `POST /products`（鉴权）  
-  Body：`name` `price` `stock` `start_time`(未来时间) `image?`；成功返回 `data=Product`。
-- `PUT /products/:id`（鉴权，仅发布者）  
-  Body：任意字段可选（同上）；成功返回 `data={id}`。
-- `DELETE /products/:id`（鉴权，仅发布者）  
-  成功：`data={id}`。
-- `GET /products/mine`（鉴权）  
-  Query：`page` `size`；成功：`data={ items, total, page, size }`。
+- `POST /products`（鉴权）
+  Body：`{ name, price, stock, start_time, end_time?, image? }`
+  - `start_time` 必须晚于当前时间
+  - `end_time` 可选，若传入必须晚于 `start_time`
+- `PUT /products/:id`（鉴权，仅发布者）
+  Body：同上，支持部分更新；`end_time=""` 表示清空结束时间。
+- `DELETE /products/:id`（鉴权，仅发布者）
+  成功：`data={ "id": number }`。
+- `GET /products/mine?page=1&page_size=10`（鉴权）
+  成功：`data={ list: Product[], total, page, page_size }`。
 
 ## 秒杀
-- `POST /seckill`（鉴权）  
-  Body：`{ "product_id": number }`  
-  成功：`code=200`，`data={"order_num": string, "payment_id": string, "status": "pending"|"ready"}`。  
-  业务失败：`code=30001`（售罄）、`30002`（重复下单）、`30003`（限流）。
+- `POST /seckill`（鉴权）
+  Body：`{ "product_id": number }`
+  成功：`data={ "order_num": string, "payment_id": string, "status": "pending"|"ready" }`。
+  常见业务码：`30001` 售罄、`30002` 重复下单、`30003` 未开始、`30004` 已结束、`30005` 系统繁忙。
 
-## 订单 & 支付
-- `GET /orders`（鉴权）  
-  Query：`page` `size`，可选 `status`（0=未支付，1=已支付，2=失败）。  
-  成功：`data={ items: Order[], total, page, size }`。
-- `GET /orders/:id`（鉴权，需本人）  
-  成功：`data={ order: Order, payment?: Payment }`。
-- `GET /orders/poll/:order_num`（鉴权）  
-  轮询异步秒杀订单状态；pending 返回 `{status,payment_id}`，ready 返回 `{status,order}`。
-- `POST /payment/callback`  
-  Body：`{ "payment_id": string, "status": "paid"|"failed"|"refunded", "notify_data"?: string }`  
-  成功：`data={ order, payment }`；未找到支付单返回 `404`。
+## 订单与支付
+- `GET /orders?page=1&page_size=10&status=0|1|2`（鉴权）
+  成功：`data={ list: Order[], total, page, page_size }`。
+- `GET /orders/:id`（鉴权，仅本人）
+  成功：`data={ order: Order, payment?: Payment, coupon?: MyCoupon }`。
+- `GET /orders/poll/:order_num`（鉴权）
+  轮询异步建单结果：
+  - `pending`：`{ status, order_num, payment_id? }`
+  - `ready`：`{ status, order_num, payment_id, order }`
+  - `failed`：`{ status, order_num, message }`
+- `POST /orders/:id/apply-coupon`（鉴权，仅本人）
+  Body：`{ "coupon_id": number | null }`
+  `coupon_id` 为空时表示移除已用优惠券。
+  成功：`data={ order, payment?, coupon? }`。
+- `POST /payment/callback`
+  Body：`{ "payment_id": string, "status": "paid"|"failed"|"refunded", "notify_data"?: string }`
+  成功：`data={ order, payment, coupon? }`；支付单不存在返回 `404`。
+
+## VIP 与优惠券
+- `GET /vip/profile`（鉴权）
+  成功：`data={ total_spent_cents, growth_level, paid_level, paid_expired_at, effective_level }`。
+- `POST /vip/purchase`（鉴权）
+  Body：`{ "plan_id": 1|2 }`
+  当前套餐：
+  - `1`：L3，30 天
+  - `2`：L4，90 天
+  当前为模拟购买成功，直接生效并尝试发放当月 VIP 券。
+- `GET /coupons/mine?status=available|used|expired&page=1&page_size=20`（鉴权）
+  成功：`data={ list: MyCoupon[], total, page, page_size }`。
+- `POST /coupons/purchase`（鉴权）
+  Body：`{ "coupon_id": number }`
+  成功：`data=MyCoupon`；若模板不可购买或已失效会返回业务错误。
 
 ## 管理后台
-- 鉴权要求：所有 `/admin/*` 接口都需要管理员 `access_token`；普通用户会收到 HTTP `403` + `msg="需要管理员权限"`。
-- `GET /admin/stats`  
+- 鉴权要求：所有 `/admin/*` 接口都需要管理员 `access_token`；普通用户会收到 HTTP `403` + `msg="需要管理员权限"`
+- `GET /admin/stats`
   成功：`data={ total_users, total_orders, total_revenue_cents, total_products, pending_orders }`。
-- `GET /admin/users?page=1&page_size=20`  
-  成功：`data={ list: User[], total, page, page_size }`，返回全站用户。
-- `GET /admin/orders?page=1&page_size=20&status=0|1|2`  
-  成功：`data={ list: Order[], total, page, page_size }`，返回全站订单。
-- `GET /admin/products?page=1&page_size=20`  
-  成功：`data={ list: Product[], total, page, page_size }`，返回全站商品。
-- `GET /admin/coupons?page=1&page_size=20`  
+- `GET /admin/users?page=1&page_size=20`
+  成功：`data={ list: User[], total, page, page_size }`。
+- `GET /admin/orders?page=1&page_size=20&status=0|1|2`
+  成功：`data={ list: Order[], total, page, page_size }`。
+- `GET /admin/products?page=1&page_size=20`
+  成功：`data={ list: Product[], total, page, page_size }`。
+- `GET /admin/coupons?page=1&page_size=20`
   成功：`data={ list: Coupon[], total, page, page_size }`。
-- `POST /admin/coupons`  
-  Body：`{ type, title, description, amount_cents, discount_rate, min_spend_cents, valid_from, valid_to, purchasable, price_cents, status }`。  
-  `type` 支持 `full_cut|discount`，`status` 支持 `active|inactive`；时间支持 `RFC3339`、`YYYY-MM-DD HH:mm[:ss]`、`YYYY-MM-DDTHH:mm[:ss]`。  
-  成功：`data=Coupon`。
-- `PUT /admin/coupons/:id`  
-  Body 同上，支持部分字段更新。成功：`data=Coupon`。
-- `DELETE /admin/coupons/:id`  
+- `POST /admin/coupons`
+  Body：`{ type, title, description, amount_cents, discount_rate, min_spend_cents, valid_from, valid_to, purchasable, price_cents, status }`
+  - `type`：`full_cut | discount`
+  - `status`：`active | inactive`
+  - 时间支持 `RFC3339`、`YYYY-MM-DD HH:mm[:ss]`、`YYYY-MM-DDTHH:mm[:ss]`
+- `PUT /admin/coupons/:id`
+  Body 同上，支持部分字段更新。
+- `DELETE /admin/coupons/:id`
   成功：`data={ "message": "ok" }`。
-- `GET /admin/risk/blacklist` / `GET /admin/risk/graylist`  
+- `GET /admin/risk/blacklist` / `GET /admin/risk/graylist`
   成功：`data={ ip: string[], user: string[] }`。
-- `POST /admin/risk/blacklist` / `POST /admin/risk/graylist`  
-  Body：`{ "type": "ip"|"user", "value": string }`；成功：`data={ "message": "ok" }`。
-- `DELETE /admin/risk/blacklist` / `DELETE /admin/risk/graylist`  
+- `POST /admin/risk/blacklist` / `POST /admin/risk/graylist`
+  Body：`{ "type": "ip"|"user", "value": string }`。
+- `DELETE /admin/risk/blacklist` / `DELETE /admin/risk/graylist`
   Body 同上；成功：`data={ "message": "ok" }`。
 
 ## 数据模型（核心字段）
 - `User`：`id`, `username`, `balance`, `avatar`, `total_spent_cents`, `growth_level`, `role`, `created_at`, `updated_at`
-- `Product`：`id`, `user_id`, `name`, `price`, `stock`, `start_time`, `image`, `created_at`, `updated_at`
-- `Order`：`id`, `user_id`, `product_id`, `order_num`, `status`（0 未支付 /1 已支付 /2 失败）, `created_at`, `updated_at`
-- `Payment`：`id`, `order_id`, `payment_id`, `amount_cents`, `status`（pending/paid/failed/refunded）, `notify_data?`, `created_at`, `updated_at`
+- `Product`：`id`, `user_id`, `name`, `price`, `stock`, `start_time`, `end_time`, `image`, `created_at`, `updated_at`
+- `Order`：`id`, `user_id`, `product_id`, `order_num`, `status`, `created_at`, `updated_at`
+- `Payment`：`id`, `order_id`, `payment_id`, `amount_cents`, `status`, `notify_data`, `created_at`, `updated_at`
 - `Coupon`：`id`, `type`, `title`, `description`, `amount_cents`, `discount_rate`, `min_spend_cents`, `valid_from`, `valid_to`, `purchasable`, `price_cents`, `status`
+- `MyCoupon`：`id`, `coupon_id`, `type`, `title`, `description`, `amount_cents`, `discount_rate`, `min_spend_cents`, `status`, `valid_from`, `valid_to`, `obtained_from`
 
 ## 风控与限流
-- 开关：应用配置文件中的 `risk.enable`；按接口（登录/支付/秒杀）和热点参数（product_id）限流，命中返回 `code=701/702`。  
-- 键粒度：默认按用户 ID / IP + 路径或参数建桶。修改频次可调整 `rate/burst/ttl` 配置。
+- 开关：`risk.enable`
+- 接口级限流：登录、支付、秒杀
+- 热点参数限流：`product_id`
+- 名单策略：黑名单直接拒绝，灰名单进入更严格限流
+- 命中后常见业务码：`701` / `702`

@@ -1,73 +1,95 @@
-# SneakerFlash 前端方案
+# SneakerFlash 前端实现方案
 
-## 目标与约束
-- 目标：球鞋秒杀前端，覆盖注册登录、商品浏览与发布、秒杀、订单与支付状态查看。
-- 约束：对接当前后端接口（`docs/backend-api.md`），只做已有接口对应的功能，不预留未实现的。
+## 当前结论
+- 前端已经不是初始化阶段方案，而是**当前实现说明**。
+- 现有页面覆盖：认证、首页、商品详情与发布、订单列表与详情、个人资料、VIP 中心、管理后台。
+- 设计基调已经收敛为 Editorial 风格，后续迭代应以现有视觉体系和路由结构为准。
 
-## 技术栈与初始化
-- Vue 3 + TypeScript + Vite 5（Script Setup）
-- Tailwind CSS v3 + Shadcn-vue（New York / Zinc），Motion-v，Lenis
-- 状态：Pinia；请求：Axios；工具：@vueuse/core、lucide-vue-next、date-fns、clsx/tailwind-merge/cva、vue-sonner
-- 初始化命令（在项目根执行）：
-  1) `pnpm create vite frontend --template vue-ts`
-  2) `cd frontend`
-  3) `pnpm add -D tailwindcss postcss autoprefixer && pnpm exec tailwindcss init -p`
-  4) `pnpm add axios pinia vue-router motion-v @vueuse/core lucide-vue-next clsx tailwind-merge class-variance-authority date-fns vue-sonner`
-  5) `pnpm dlx shadcn-vue@latest init`（New York, Zinc）
+## 技术栈
+- Vue 3 + TypeScript + Vite
+- Vue Router + Pinia
+- Tailwind CSS v3 + `class-variance-authority`
+- Axios
+- Motion-v + Lenis
+- `vue-sonner` 用于提示反馈
 
 ## 目录结构
-```
+```text
 src/
-├─ assets/css/        # index.css (Tailwind directives + 纹理 + 变量)
+├─ assets/css/        # 全局样式、主题变量、toast 覆盖
 ├─ components/
-│  ├─ ui/             # Shadcn 基础组件
-│  └─ motion/         # MagmaButton, ParallaxCard 等
-├─ composables/       # useSeckill, useCountDown, useAuthGuard
-├─ layout/            # MainLayout, AuthLayout
-├─ lib/               # api.ts (Axios 拦截), utils.ts (cn/formatPrice)
-├─ stores/            # userStore, productStore
-├─ types/             # user.ts, product.ts, order.ts
-├─ views/             # Home/, Product/, Auth/
-└─ router/index.ts
+│  ├─ ui/             # 通用基础组件
+│  └─ motion/         # 动效组件
+├─ layout/            # MainLayout
+├─ lib/               # api.ts、admin.ts、utils.ts
+├─ router/            # 路由与守卫
+├─ stores/            # userStore、productStore
+├─ types/             # 业务类型定义
+└─ views/
+   ├─ Admin/
+   ├─ Auth/
+   ├─ Home/
+   ├─ Orders/
+   ├─ Product/
+   └─ User/
 ```
 
-## 设计风格
-- Tailwind：页面底色 `#F9F8F6`，卡片白色 `#FFFFFF`，文字 `#1C1C1C`；字体标题用 `Playfair Display`、正文用 `Inter`；按钮和卡片统一硬边、细边框、无阴影。
-- 禁止：渐变、发光、彩色强调、圆角阴影。
-- 组件：Button/Input/Card/Progress/Dialog/Toast 用 Shadcn 生成；`MagmaButton` 是主按钮样式；`ParallaxCard` 只做轻微位移效果。
+## 页面与路由
+- `/`：商品首页
+- `/login`、`/register`：认证页面
+- `/product/:id`：商品详情与秒杀入口
+- `/products/publish`：发布商品
+- `/orders`、`/orders/:id`：订单列表与订单详情
+- `/profile`：个人资料
+- `/vip`：VIP 中心与优惠券入口
+- `/admin` 及其子路由：统计、用户、订单、优惠券、商品、风控
 
-## API 对接要点
-- BaseURL：`http://localhost:8000/api/v1`
-- 鉴权：`Authorization: Bearer <access_token>`；`refresh_token` 备用。存储键建议 `sf_access_token` / `sf_refresh_token`
-- 接口（核心）：
-  - 认证：`POST /register`，`POST /login`（返回 access/refresh/expires_in），`POST /refresh`
-  - 用户：`GET /profile`，`PUT /profile`
-  - 上传：`POST /upload`（multipart）
-  - 商品：`GET /products`，`GET /product/:id`，`POST /products`，`PUT /products/:id`，`DELETE /products/:id`，`GET /products/mine`
-  - 秒杀：`POST /seckill {product_id}`
-  - 订单：`POST /orders {product_id}`，`GET /orders`，`GET /orders/:id`（含支付单）
-- 响应包装：后端统一 `{code,msg,data}`；Axios 拦截器处理 `code!=200`、401 自动跳登录，必要时用 refresh_token 重试一次，再失败清理态并跳转。toast 显示业务错误与限流/黑名单提示。
+## 视觉与交互约束
+- 主题色以 `#F9F8F6`、`#FFFFFF`、`#1C1C1C` 为主
+- 标题字体使用 `Playfair Display`，正文使用 `Inter`
+- 组件保持硬边、细边框、低装饰、克制动效
+- 页面级风格以现有 Editorial 基调为准，不再沿用旧版“初始化阶段 UI 方案”
 
-## 核心业务流
-- `useSeckill`：状态机 `idle/loading/success/failed`；调用 `/seckill`；成功展示 `order_num`；按业务码提示售罄/重复/限流。
-- 下单/支付：详情页支持 `/orders` 下单，拿到 `payment_id/status/amount_cents`；显示“待支付/已支付/失败”态，支付成功后刷新库存与订单列表。
-- 倒计时：`useCountDown(start_time)` 返回剩余秒、`isStarted`；未开始按钮禁用显示 `MM:SS`。
-- 库存/订单轮询：详情页可选 3-5s 轮询 `GET /product/:id`；订单详情可 5-10s 轮询支付状态（pending→paid/failed）。
-- 路由守卫：访问需要登录的操作（详情页抢购、下单）缺 token 时重定向 `/login`。
+## 数据流与状态管理
+### API 封装
+- 统一通过 `frontend/src/lib/api.ts` 发起请求
+- 默认 Base URL：`VITE_API_BASE_URL || /api/v1`
+- 后端响应 `code != 200` 时统一抛错
+- `401` 时自动用 `refresh_token` 刷新 access token，失败后清理登录态并跳转登录页
 
-## 开发里程碑
-1) 工程初始化 + Tailwind/Shadcn 配置 + 基础别名（`@/*`）。
-2) 公共层：`lib/api.ts`、`lib/utils.ts`、`types/*`、`stores/userStore`（登录、注销、鉴权状态）、`stores/productStore`（列表/详情缓存）。
-3) UI 组件：Shadcn 组件生成、`MagmaButton`、`ParallaxCard`。
-4) 路由 & 布局：AuthLayout、MainLayout、路由守卫。
-5) 页面：
-   - Auth：登录/注册表单，登录成功存 token 跳首页。
-   - Home：商品列表，带库存条、倒计时、hover 效果。
-   - Product Detail：左右分栏，按钮显示不同状态（未开始/进行中/加载中/结果），秒杀失败时按钮抖动，可选库存轮询。
-   - Orders：列表（分页、状态筛选）、详情展示订单+支付状态。
-6) 动效与体验：Motion-v + Lenis 平滑滚动，全局 toast，加载遮罩。
+### Token 存储
+- `localStorage.access_token`
+- `localStorage.refresh_token`
 
-## 测试与验证
-- 运行 `pnpm dev` 验证路由与接口调用（需后端/Redis/Kafka 就绪）。
-- `pnpm build` 或 `pnpm exec vue-tsc --noEmit` 做类型/构建检查。
-- 手工覆盖：登录失败提示、列表空态、秒杀失败提示、token 失效跳转。
+### Store 约定
+- `userStore`：登录态、用户资料、管理员判定
+- `productStore`：商品列表/详情缓存与刷新
+- 新增 store 时保持同样模式，不直接在视图层散落请求与缓存逻辑
+
+## 后端接口对接范围
+- 认证：`/register`、`/login`、`/refresh`
+- 用户：`/profile`、`/upload`
+- 商品：`/products`、`/product/:id`、`/products/mine`
+- 秒杀：`/seckill`
+- 订单：`/orders`、`/orders/:id`、`/orders/poll/:order_num`、`/orders/:id/apply-coupon`
+- 支付：`/payment/callback`
+- VIP：`/vip/profile`、`/vip/purchase`
+- 优惠券：`/coupons/mine`、`/coupons/purchase`
+- 管理后台：`/admin/*`
+
+## 已实现的关键体验
+- 未登录访问受保护页面会跳转登录页
+- 秒杀成功后支持轮询订单状态
+- 订单详情支持支付态查看与优惠券应用
+- 用户中心可查看 VIP 信息
+- 管理后台已支持基础运营数据与风控名单维护
+
+## 测试与构建
+- 开发：`pnpm dev`
+- 构建：`pnpm build`
+- 单测：`pnpm test:unit`
+- E2E：`pnpm test:e2e`
+
+## 后续前端工作建议
+1. 若继续推进 P2，优先补“未支付自动取消”与“实时推送”对应的前端状态同步。
+2. 管理后台若引入细粒度 RBAC，需要同步补路由权限模型和页面级能力裁剪。
