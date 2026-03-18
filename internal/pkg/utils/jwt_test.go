@@ -13,7 +13,7 @@ func TestGenerateTokensAndParse(t *testing.T) {
 	config.Conf.JWT.Expried = 3600
 	config.Conf.JWT.RefreshExpried = 7200
 
-	access, refresh, err := GenerateTokens(7, "alice")
+	access, refresh, err := GenerateTokens(7, "alice", "admin")
 	if err != nil {
 		t.Fatalf("GenerateTokens() error = %v", err)
 	}
@@ -25,7 +25,7 @@ func TestGenerateTokensAndParse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParshToken(access) error = %v", err)
 	}
-	if accessClaims.UserID != 7 || accessClaims.Username != "alice" || accessClaims.TokenType != tokenTypeAccess {
+	if accessClaims.UserID != 7 || accessClaims.Username != "alice" || accessClaims.Role != "admin" || accessClaims.TokenType != tokenTypeAccess {
 		t.Fatalf("unexpected access claims: %+v", accessClaims)
 	}
 
@@ -46,6 +46,7 @@ func TestParshToken_InvalidSignature(t *testing.T) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		UserID:    1,
 		Username:  "bob",
+		Role:      "user",
 		TokenType: tokenTypeAccess,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),

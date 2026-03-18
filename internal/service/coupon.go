@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -17,9 +18,14 @@ var (
 	ErrCouponNotAvailable   = errors.New("优惠券不可用")
 	ErrCouponExpired        = errors.New("优惠券已过期")
 	ErrCouponNotPurchasable = errors.New("该优惠券不支持购买")
+	ErrCouponTitleRequired  = errors.New("优惠券标题不能为空")
+	ErrCouponTemplateStatus = errors.New("优惠券模板状态无效")
+	ErrCouponTemplateInUse  = errors.New("优惠券模板已被领取或使用，不能删除")
 	ErrCouponBelowThreshold = errors.New("订单金额未达到优惠券使用门槛")
 	ErrCouponInvalidRate    = errors.New("优惠券折扣率无效")
 	ErrCouponTypeInvalid    = errors.New("不支持的优惠券类型")
+	ErrCouponInvalidAmount  = errors.New("优惠金额无效")
+	ErrCouponInvalidPeriod  = errors.New("优惠券有效期无效")
 )
 
 // CouponService 优惠券服务，处理发券、核销、VIP 月度配额等。
@@ -51,6 +57,34 @@ type MyCoupon struct {
 	ValidFrom     time.Time          `json:"valid_from"`
 	ValidTo       time.Time          `json:"valid_to"`
 	ObtainedFrom  string             `json:"obtained_from"` // purchase/vip_month
+}
+
+type CouponTemplateInput struct {
+	Type          model.CouponType
+	Title         string
+	Description   string
+	AmountCents   int64
+	DiscountRate  int
+	MinSpendCents int64
+	ValidFrom     time.Time
+	ValidTo       time.Time
+	Purchasable   bool
+	PriceCents    int64
+	Status        string
+}
+
+type CouponTemplatePatch struct {
+	Type          *model.CouponType
+	Title         *string
+	Description   *string
+	AmountCents   *int64
+	DiscountRate  *int
+	MinSpendCents *int64
+	ValidFrom     *time.Time
+	ValidTo       *time.Time
+	Purchasable   *bool
+	PriceCents    *int64
+	Status        *string
 }
 
 // vipMonthlyQuota VIP 等级对应的月度发券配额
@@ -213,6 +247,145 @@ func (s *CouponService) ListUserCoupons(ctx context.Context, userID uint, status
 	return out, total, nil
 }
 
+func (s *CouponService) ListTemplates(ctx context.Context, page, pageSize int) ([]model.Coupon, int64, error) {
+	if ctx == nil {
+		return nil, 0, fmt.Errorf("context is nil")
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+	return s.couponRepo.ListAll(ctx, page, pageSize)
+}
+
+func (s *CouponService) CreateTemplate(ctx context.Context, input CouponTemplateInput) (*model.Coupon, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
+
+	status, err := parseCouponTemplateStatus(input.Status, true)
+	if err != nil {
+		return nil, err
+	}
+
+	coupon := &model.Coupon{
+		Type:          input.Type,
+		Title:         strings.TrimSpace(input.Title),
+		Description:   strings.TrimSpace(input.Description),
+		AmountCents:   input.AmountCents,
+		DiscountRate:  input.DiscountRate,
+		MinSpendCents: input.MinSpendCents,
+		ValidFrom:     input.ValidFrom,
+		ValidTo:       input.ValidTo,
+		Purchasable:   input.Purchasable,
+		PriceCents:    input.PriceCents,
+		Status:        status,
+	}
+	if err := validateCouponTemplate(coupon); err != nil {
+		return nil, err
+	}
+	if err := s.couponRepo.Create(ctx, coupon); err != nil {
+		return nil, err
+	}
+	return coupon, nil
+}
+
+func (s *CouponService) UpdateTemplate(ctx context.Context, id uint, patch CouponTemplatePatch) (*model.Coupon, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is nil")
+	}
+
+	coupon, err := s.couponRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCouponNotFound
+		}
+		return nil, err
+	}
+
+	updates := make(map[string]any)
+	if patch.Type != nil {
+		coupon.Type = *patch.Type
+		updates["type"] = *patch.Type
+	}
+	if patch.Title != nil {
+		coupon.Title = strings.TrimSpace(*patch.Title)
+		updates["title"] = coupon.Title
+	}
+	if patch.Description != nil {
+		coupon.Description = strings.TrimSpace(*patch.Description)
+		updates["description"] = coupon.Description
+	}
+	if patch.AmountCents != nil {
+		coupon.AmountCents = *patch.AmountCents
+		updates["amount_cents"] = *patch.AmountCents
+	}
+	if patch.DiscountRate != nil {
+		coupon.DiscountRate = *patch.DiscountRate
+		updates["discount_rate"] = *patch.DiscountRate
+	}
+	if patch.MinSpendCents != nil {
+		coupon.MinSpendCents = *patch.MinSpendCents
+		updates["min_spend_cents"] = *patch.MinSpendCents
+	}
+	if patch.ValidFrom != nil {
+		coupon.ValidFrom = *patch.ValidFrom
+		updates["valid_from"] = *patch.ValidFrom
+	}
+	if patch.ValidTo != nil {
+		coupon.ValidTo = *patch.ValidTo
+		updates["valid_to"] = *patch.ValidTo
+	}
+	if patch.Purchasable != nil {
+		coupon.Purchasable = *patch.Purchasable
+		updates["purchasable"] = *patch.Purchasable
+	}
+	if patch.PriceCents != nil {
+		coupon.PriceCents = *patch.PriceCents
+		updates["price_cents"] = *patch.PriceCents
+	}
+	if patch.Status != nil {
+		status, err := parseCouponTemplateStatus(*patch.Status, false)
+		if err != nil {
+			return nil, err
+		}
+		coupon.Status = status
+		updates["status"] = coupon.Status
+	}
+
+	if err := validateCouponTemplate(coupon); err != nil {
+		return nil, err
+	}
+	updates["amount_cents"] = coupon.AmountCents
+	updates["discount_rate"] = coupon.DiscountRate
+	if err := s.couponRepo.Update(ctx, id, updates); err != nil {
+		return nil, err
+	}
+	return s.couponRepo.GetByID(ctx, id)
+}
+
+func (s *CouponService) DeleteTemplate(ctx context.Context, id uint) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
+	if _, err := s.couponRepo.GetByID(ctx, id); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCouponNotFound
+		}
+		return err
+	}
+	refCount, err := s.userCouponRepo.CountByCouponID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if refCount > 0 {
+		return ErrCouponTemplateInUse
+	}
+	return s.couponRepo.Delete(ctx, id)
+}
+
 // PurchaseCoupon 购买优惠券，事务保护。
 func (s *CouponService) PurchaseCoupon(ctx context.Context, userID, couponID uint) (*MyCoupon, error) {
 	if ctx == nil {
@@ -350,4 +523,56 @@ func (s *CouponService) MarkExpiredCoupons(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("context is nil")
 	}
 	return s.userCouponRepo.MarkExpiredBatch(ctx, time.Now())
+}
+
+func validateCouponTemplate(coupon *model.Coupon) error {
+	if coupon == nil {
+		return fmt.Errorf("coupon is nil")
+	}
+	if strings.TrimSpace(coupon.Title) == "" {
+		return ErrCouponTitleRequired
+	}
+	if coupon.MinSpendCents < 0 || coupon.PriceCents < 0 {
+		return ErrCouponInvalidAmount
+	}
+	if coupon.ValidFrom.IsZero() || coupon.ValidTo.IsZero() || !coupon.ValidTo.After(coupon.ValidFrom) {
+		return ErrCouponInvalidPeriod
+	}
+	if coupon.Status != model.CouponTemplateStatusActive && coupon.Status != model.CouponTemplateStatusInactive {
+		return ErrCouponTemplateStatus
+	}
+
+	switch coupon.Type {
+	case model.CouponTypeFullCut:
+		if coupon.AmountCents <= 0 {
+			return ErrCouponInvalidAmount
+		}
+		coupon.DiscountRate = 0
+	case model.CouponTypeDiscount:
+		if coupon.DiscountRate <= 0 || coupon.DiscountRate >= 100 {
+			return ErrCouponInvalidRate
+		}
+		coupon.AmountCents = 0
+	default:
+		return ErrCouponTypeInvalid
+	}
+
+	return nil
+}
+
+func parseCouponTemplateStatus(status string, allowEmpty bool) (string, error) {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		if allowEmpty {
+			return model.CouponTemplateStatusActive, nil
+		}
+		return "", ErrCouponTemplateStatus
+	}
+
+	switch status {
+	case model.CouponTemplateStatusActive, model.CouponTemplateStatusInactive:
+		return status, nil
+	default:
+		return "", ErrCouponTemplateStatus
+	}
 }

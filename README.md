@@ -62,6 +62,7 @@ Makefile                 所有常用命令的入口
 | `make dev-down` | 停止开发环境依赖 |
 | `make dev-api` | 启动 API 服务 |
 | `make dev-worker` | 启动 Kafka Worker |
+| `make dev-admin USERNAME=alice` | 将开发环境中的指定用户提权为管理员 |
 | `make dev-frontend` | 启动前端开发服务器 |
 | `make lint` | Go + 前端代码检查 |
 | `make test` | Go 单元测试 |
@@ -73,6 +74,18 @@ Makefile                 所有常用命令的入口
 | `make help` | 查看所有命令 |
 
 生产环境对应 `make prod-*` 系列命令，用法相同。
+
+如果需要启用管理后台，不再需要手写 SQL；先注册普通用户，再执行：
+
+```bash
+make dev-admin USERNAME=alice
+```
+
+随后重新登录该账号即可获得管理员权限。若要使用其他配置文件，也可以执行：
+
+```bash
+make admin CONFIG=./config.dev.local.yml USERNAME=alice
+```
 
 ## 文档
 

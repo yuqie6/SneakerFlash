@@ -79,6 +79,47 @@ func (r *OrderRepo) ListByUserID(ctx context.Context, uid uint, status *model.Or
 	return orders, total, err
 }
 
+func (r *OrderRepo) ListAll(ctx context.Context, status *model.OrderStatus, page, pageSize int) ([]model.Order, int64, error) {
+	var orders []model.Order
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.Order{})
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&orders).Error; err != nil {
+		return nil, 0, err
+	}
+	return orders, total, nil
+}
+
+func (r *OrderRepo) CountAll(ctx context.Context) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Model(&model.Order{}).Count(&total).Error
+	return total, err
+}
+
+func (r *OrderRepo) CountByStatus(ctx context.Context, status model.OrderStatus) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Model(&model.Order{}).Where("status = ?", status).Count(&total).Error
+	return total, err
+}
+
+func (r *OrderRepo) SumRevenue(ctx context.Context) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Model(&model.Payment{}).
+		Where("status = ?", model.PaymentStatusPaid).
+		Select("COALESCE(SUM(amount_cents), 0)").
+		Scan(&total).Error
+	return total, err
+}
+
 // UpdateStatusIfMatch 仅在当前状态匹配时更新，用于避免重复回调覆盖。
 func (r *OrderRepo) UpdateStatusIfMatch(ctx context.Context, orderID uint, fromStatus, toStatus model.OrderStatus) (int64, error) {
 	tx := r.db.WithContext(ctx).Model(&model.Order{}).Where("id = ? AND status = ?", orderID, fromStatus).Update("status", toStatus)

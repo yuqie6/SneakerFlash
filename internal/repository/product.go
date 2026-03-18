@@ -84,6 +84,16 @@ func (r *ProductRepo) List(ctx context.Context, page, pageSize int) ([]model.Pro
 	return products, total, err
 }
 
+func (r *ProductRepo) ListAll(ctx context.Context, page, pageSize int) ([]model.Product, int64, error) {
+	return r.List(ctx, page, pageSize)
+}
+
+func (r *ProductRepo) CountAll(ctx context.Context) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Model(&model.Product{}).Count(&total).Error
+	return total, err
+}
+
 // ListByUserID 查询指定用户的商品列表。
 func (r *ProductRepo) ListByUserID(ctx context.Context, userID uint, page, pageSize int) ([]model.Product, int64, error) {
 	var products []model.Product

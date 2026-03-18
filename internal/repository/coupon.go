@@ -52,6 +52,33 @@ func (r *CouponRepo) Create(ctx context.Context, coupon *model.Coupon) error {
 	return r.db.WithContext(ctx).Create(coupon).Error
 }
 
+func (r *CouponRepo) ListAll(ctx context.Context, page, pageSize int) ([]model.Coupon, int64, error) {
+	var coupons []model.Coupon
+	var total int64
+
+	db := r.db.WithContext(ctx).Model(&model.Coupon{})
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := db.Order("id desc").Offset(offset).Limit(pageSize).Find(&coupons).Error; err != nil {
+		return nil, 0, err
+	}
+	return coupons, total, nil
+}
+
+func (r *CouponRepo) Update(ctx context.Context, id uint, updates map[string]any) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.Coupon{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *CouponRepo) Delete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&model.Coupon{}, id).Error
+}
+
 // FirstOrCreate 按条件查询或创建券模板，并发安全。
 func (r *CouponRepo) FirstOrCreate(ctx context.Context, coupon *model.Coupon, query string, args ...any) (*model.Coupon, error) {
 	if err := r.db.WithContext(ctx).Where(query, args...).FirstOrCreate(coupon).Error; err != nil {
@@ -66,6 +93,12 @@ type UserCouponRepo struct {
 
 func NewUserCouponRepo(db *gorm.DB) *UserCouponRepo {
 	return &UserCouponRepo{db: db}
+}
+
+func (r *UserCouponRepo) CountByCouponID(ctx context.Context, couponID uint) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Model(&model.UserCoupon{}).Where("coupon_id = ?", couponID).Count(&total).Error
+	return total, err
 }
 
 // ListByUserAndStatus 按用户和状态查询用户券列表，支持分页。

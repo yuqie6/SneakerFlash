@@ -10,6 +10,7 @@ import (
 type Claims struct {
 	UserID    uint   `json:"user_id"`
 	Username  string `json:"username"`
+	Role      string `json:"role"`
 	TokenType string `json:"token_type"`
 	jwt.RegisteredClaims
 }
@@ -20,8 +21,8 @@ const (
 )
 
 // GenerateTokens 签发 access 与 refresh token，TTL 读取配置。
-func GenerateTokens(userID uint, username string) (accessToken, refreshToken string, err error) {
-	accessToken, err = generateToken(userID, username, tokenTypeAccess, config.Conf.JWT.Expried)
+func GenerateTokens(userID uint, username, role string) (accessToken, refreshToken string, err error) {
+	accessToken, err = generateToken(userID, username, role, tokenTypeAccess, config.Conf.JWT.Expried)
 	if err != nil {
 		return "", "", err
 	}
@@ -29,17 +30,18 @@ func GenerateTokens(userID uint, username string) (accessToken, refreshToken str
 	if refreshTTL == 0 {
 		refreshTTL = config.Conf.JWT.Expried * 7
 	}
-	refreshToken, err = generateToken(userID, username, tokenTypeRefresh, refreshTTL)
+	refreshToken, err = generateToken(userID, username, role, tokenTypeRefresh, refreshTTL)
 	return
 }
 
-func generateToken(userID uint, username, tokenType string, ttlSeconds int) (string, error) {
+func generateToken(userID uint, username, role, tokenType string, ttlSeconds int) (string, error) {
 	now := time.Now()
 	expireTime := now.Add(time.Duration(ttlSeconds) * time.Second)
 
 	claims := Claims{
 		UserID:    userID,
 		Username:  username,
+		Role:      role,
 		TokenType: tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expireTime),

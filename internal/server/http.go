@@ -30,6 +30,8 @@ func NewHttpServer() *gin.Engine {
 	couponServicer := service.NewCouponService(db.DB)
 	vipServicer := service.NewVIPService(db.DB, userRepo, couponServicer)
 	healthServicer := service.NewHealthService()
+	riskServicer := service.NewRiskService(redis.RDB)
+	adminServicer := service.NewAdminService(db.DB, userRepo, productRepo)
 
 	// handler 层
 	userHandler := handler.NewUserHandler(userServicer)
@@ -40,6 +42,7 @@ func NewHttpServer() *gin.Engine {
 	vipHandler := handler.NewVIPHandler(vipServicer)
 	couponHandler := handler.NewCouponHandler(couponServicer)
 	healthHandler := handler.NewHealthHandler(healthServicer)
+	adminHandler := handler.NewAdminHandler(adminServicer, riskServicer, couponServicer)
 
 	// 注册路由
 	r := gin.New()
@@ -128,6 +131,25 @@ func NewHttpServer() *gin.Engine {
 		auth.GET("/orders/:id", orderHandler.GetOrder)
 		auth.GET("/orders/poll/:order_num", orderHandler.PollOrder)
 		auth.POST("/orders/:id/apply-coupon", orderHandler.ApplyCoupon)
+	}
+
+	admin := api.Group("/admin")
+	admin.Use(middlerware.JWTauth(), middlerware.AdminAuth())
+	{
+		admin.GET("/stats", adminHandler.Stats)
+		admin.GET("/users", adminHandler.ListUsers)
+		admin.GET("/orders", adminHandler.ListOrders)
+		admin.GET("/coupons", adminHandler.ListCoupons)
+		admin.POST("/coupons", adminHandler.CreateCoupon)
+		admin.PUT("/coupons/:id", adminHandler.UpdateCoupon)
+		admin.DELETE("/coupons/:id", adminHandler.DeleteCoupon)
+		admin.GET("/products", adminHandler.ListProducts)
+		admin.GET("/risk/blacklist", adminHandler.ListBlacklist)
+		admin.POST("/risk/blacklist", adminHandler.AddBlacklist)
+		admin.DELETE("/risk/blacklist", adminHandler.RemoveBlacklist)
+		admin.GET("/risk/graylist", adminHandler.ListGraylist)
+		admin.POST("/risk/graylist", adminHandler.AddGraylist)
+		admin.DELETE("/risk/graylist", adminHandler.RemoveGraylist)
 	}
 	return r
 }

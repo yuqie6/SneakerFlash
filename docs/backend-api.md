@@ -28,7 +28,7 @@
 
 ## 用户
 - `GET /profile`（鉴权）  
-  成功：`data=User`。
+  成功：`data=User`，当前会返回 `total_spent_cents`、`growth_level`、`role`。
 - `PUT /profile`（鉴权）  
   Body：可选 `user_name`, `avatar`；至少传一项。  
   成功：`data=User`；重名返回 `code=10001`。
@@ -68,12 +68,40 @@
   Body：`{ "payment_id": string, "status": "paid"|"failed"|"refunded", "notify_data"?: string }`  
   成功：`data={ order, payment }`；未找到支付单返回 `404`。
 
+## 管理后台
+- 鉴权要求：所有 `/admin/*` 接口都需要管理员 `access_token`；普通用户会收到 HTTP `403` + `msg="需要管理员权限"`。
+- `GET /admin/stats`  
+  成功：`data={ total_users, total_orders, total_revenue_cents, total_products, pending_orders }`。
+- `GET /admin/users?page=1&page_size=20`  
+  成功：`data={ list: User[], total, page, page_size }`，返回全站用户。
+- `GET /admin/orders?page=1&page_size=20&status=0|1|2`  
+  成功：`data={ list: Order[], total, page, page_size }`，返回全站订单。
+- `GET /admin/products?page=1&page_size=20`  
+  成功：`data={ list: Product[], total, page, page_size }`，返回全站商品。
+- `GET /admin/coupons?page=1&page_size=20`  
+  成功：`data={ list: Coupon[], total, page, page_size }`。
+- `POST /admin/coupons`  
+  Body：`{ type, title, description, amount_cents, discount_rate, min_spend_cents, valid_from, valid_to, purchasable, price_cents, status }`。  
+  `type` 支持 `full_cut|discount`，`status` 支持 `active|inactive`；时间支持 `RFC3339`、`YYYY-MM-DD HH:mm[:ss]`、`YYYY-MM-DDTHH:mm[:ss]`。  
+  成功：`data=Coupon`。
+- `PUT /admin/coupons/:id`  
+  Body 同上，支持部分字段更新。成功：`data=Coupon`。
+- `DELETE /admin/coupons/:id`  
+  成功：`data={ "message": "ok" }`。
+- `GET /admin/risk/blacklist` / `GET /admin/risk/graylist`  
+  成功：`data={ ip: string[], user: string[] }`。
+- `POST /admin/risk/blacklist` / `POST /admin/risk/graylist`  
+  Body：`{ "type": "ip"|"user", "value": string }`；成功：`data={ "message": "ok" }`。
+- `DELETE /admin/risk/blacklist` / `DELETE /admin/risk/graylist`  
+  Body 同上；成功：`data={ "message": "ok" }`。
+
 ## 数据模型（核心字段）
-- `User`：`id`, `user_name`, `avatar`, `created_at`, `updated_at`
+- `User`：`id`, `username`, `balance`, `avatar`, `total_spent_cents`, `growth_level`, `role`, `created_at`, `updated_at`
 - `Product`：`id`, `user_id`, `name`, `price`, `stock`, `start_time`, `image`, `created_at`, `updated_at`
 - `Order`：`id`, `user_id`, `product_id`, `order_num`, `status`（0 未支付 /1 已支付 /2 失败）, `created_at`, `updated_at`
 - `Payment`：`id`, `order_id`, `payment_id`, `amount_cents`, `status`（pending/paid/failed/refunded）, `notify_data?`, `created_at`, `updated_at`
+- `Coupon`：`id`, `type`, `title`, `description`, `amount_cents`, `discount_rate`, `min_spend_cents`, `valid_from`, `valid_to`, `purchasable`, `price_cents`, `status`
 
 ## 风控与限流
 - 开关：应用配置文件中的 `risk.enable`；按接口（登录/支付/秒杀）和热点参数（product_id）限流，命中返回 `code=701/702`。  
-- 键粒度：默认按用户 ID / IP + 路径或参数建桶。修改频次可调整 `rate/burst/ttl` 配置。***
+- 键粒度：默认按用户 ID / IP + 路径或参数建桶。修改频次可调整 `rate/burst/ttl` 配置。

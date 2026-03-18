@@ -1,6 +1,7 @@
 package middlerware
 
 import (
+	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/app"
 	"SneakerFlash/internal/pkg/e"
 	"SneakerFlash/internal/pkg/utils"
@@ -52,6 +53,11 @@ func JWTauth() gin.HandlerFunc {
 		// 4. 存入用户信息到context
 		ctx.Set("userID", claims.UserID)
 		ctx.Set("username", claims.Username)
+		role := claims.Role
+		if role == "" {
+			role = model.UserRoleUser
+		}
+		ctx.Set("role", role)
 
 		ctx.Next()
 	}

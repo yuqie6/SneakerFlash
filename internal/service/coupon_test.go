@@ -162,3 +162,56 @@ func TestCouponService_MarkExpiredCoupons(t *testing.T) {
 		t.Fatalf("expired coupons = %+v", list)
 	}
 }
+
+func TestCouponService_DeleteTemplateInUse(t *testing.T) {
+	svc, ctx := newCouponServiceForTest(t)
+	now := time.Now()
+
+	coupon := &model.Coupon{
+		Type:          model.CouponTypeFullCut,
+		Title:         "不可删除券",
+		AmountCents:   500,
+		MinSpendCents: 1000,
+		ValidFrom:     now.Add(-time.Hour),
+		ValidTo:       now.Add(time.Hour),
+		Status:        model.CouponTemplateStatusActive,
+	}
+	if err := svc.couponRepo.Create(ctx, coupon); err != nil {
+		t.Fatalf("create coupon: %v", err)
+	}
+
+	uc := &model.UserCoupon{
+		UserID:       1,
+		CouponID:     coupon.ID,
+		Status:       model.CouponStatusAvailable,
+		ObtainedFrom: "purchase",
+		ValidFrom:    now.Add(-time.Hour),
+		ValidTo:      now.Add(time.Hour),
+		IssuedAt:     now,
+	}
+	if err := svc.userCouponRepo.Create(ctx, uc); err != nil {
+		t.Fatalf("create user coupon: %v", err)
+	}
+
+	if err := svc.DeleteTemplate(ctx, coupon.ID); !errors.Is(err, ErrCouponTemplateInUse) {
+		t.Fatalf("DeleteTemplate() error = %v, want %v", err, ErrCouponTemplateInUse)
+	}
+}
+
+func TestCouponService_CreateTemplateRejectsInvalidStatus(t *testing.T) {
+	svc, ctx := newCouponServiceForTest(t)
+	now := time.Now()
+
+	_, err := svc.CreateTemplate(ctx, CouponTemplateInput{
+		Type:          model.CouponTypeFullCut,
+		Title:         "状态非法",
+		AmountCents:   500,
+		MinSpendCents: 1000,
+		ValidFrom:     now.Add(-time.Hour),
+		ValidTo:       now.Add(time.Hour),
+		Status:        "enabled",
+	})
+	if !errors.Is(err, ErrCouponTemplateStatus) {
+		t.Fatalf("CreateTemplate() error = %v, want %v", err, ErrCouponTemplateStatus)
+	}
+}

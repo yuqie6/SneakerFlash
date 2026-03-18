@@ -4,6 +4,7 @@ import (
 	"SneakerFlash/internal/config"
 	"SneakerFlash/internal/pkg/app"
 	"SneakerFlash/internal/pkg/e"
+	"SneakerFlash/internal/pkg/utils"
 	"context"
 	"fmt"
 	"io"
@@ -165,8 +166,7 @@ func BlackListMiddleware(rdb *redis.Client) gin.HandlerFunc {
 				return
 			}
 		}
-		if uidAny, ok := c.Get("userID"); ok {
-			uid := fmt.Sprintf("%v", uidAny)
+		if uid := currentUserIdentifier(c); uid != "" {
 			in, _ := rdb.SIsMember(ctx, "risk:user:black", uid).Result()
 			if in {
 				appG.ErrorMsg(http.StatusTooManyRequests, e.RISK_BLACK, "账号被限制")
@@ -195,8 +195,7 @@ func GrayListMiddleware(rdb *redis.Client) gin.HandlerFunc {
 				return
 			}
 		}
-		if uidAny, ok := c.Get("userID"); ok {
-			uid := fmt.Sprintf("%v", uidAny)
+		if uid := currentUserIdentifier(c); uid != "" {
 			in, _ := rdb.SIsMember(ctx, "risk:user:gray", uid).Result()
 			if in {
 				appG.ErrorMsg(http.StatusTooManyRequests, e.RISK_LIMITED, "灰名单限制")
@@ -217,6 +216,25 @@ func clientIP(c *gin.Context) string {
 		}
 	}
 	return c.ClientIP()
+}
+
+func currentUserIdentifier(c *gin.Context) string {
+	if uidAny, ok := c.Get("userID"); ok {
+		return fmt.Sprintf("%v", uidAny)
+	}
+
+	authHeader := c.GetHeader("Authorization")
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return ""
+	}
+
+	claims, err := utils.ParshToken(parts[1])
+	if err != nil || claims.TokenType != "access" {
+		return ""
+	}
+
+	return fmt.Sprintf("%d", claims.UserID)
 }
 
 func extractParam(c *gin.Context, name string) string {

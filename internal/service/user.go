@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
@@ -47,6 +48,7 @@ func (s *UserService) Register(ctx context.Context, username, password string) e
 		Username: username,
 		Password: hashPwd,
 		Balance:  0,
+		Role:     model.UserRoleUser,
 	}
 	if err := s.repo.Create(ctx, user); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || isMySQLDuplicate(err) {
@@ -74,7 +76,11 @@ func (s *UserService) Login(ctx context.Context, username, password string) (str
 	}
 
 	// 签发 token
-	access, refresh, err := utils.GenerateTokens(user.ID, username)
+	role := user.Role
+	if role == "" {
+		role = model.UserRoleUser
+	}
+	access, refresh, err := utils.GenerateTokens(user.ID, username, role)
 	if err != nil {
 		return "", "", err
 	}
@@ -106,7 +112,18 @@ func (s *UserService) Refresh(ctx context.Context, refreshToken string) (string,
 		return "", ErrTokenInvalid
 	}
 
-	access, _, err := utils.GenerateTokens(claims.UserID, claims.Username)
+	user, err := s.repo.GetByID(ctx, claims.UserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", ErrTokenInvalid
+		}
+		return "", err
+	}
+	role := user.Role
+	if role == "" {
+		role = model.UserRoleUser
+	}
+	access, _, err := utils.GenerateTokens(user.ID, user.Username, role)
 	if err != nil {
 		return "", fmt.Errorf("生成 token 失败: %w", err)
 	}
@@ -152,4 +169,30 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uint, username, 
 	}
 
 	return user, nil
+}
+
+// PromoteToAdmin 将指定用户提权为管理员；已是管理员时保持幂等。
+func (s *UserService) PromoteToAdmin(ctx context.Context, username string) error {
+	if ctx == nil {
+		return fmt.Errorf("context is nil")
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return fmt.Errorf("username is empty")
+	}
+
+	user, err := s.repo.GetByUsername(ctx, username)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	if user.Role == model.UserRoleAdmin {
+		return nil
+	}
+
+	return s.repo.UpdateProfile(ctx, user.ID, map[string]any{"role": model.UserRoleAdmin})
 }

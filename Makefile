@@ -11,7 +11,7 @@ PROD_ENV_FILE ?= ./.env.prod.local
 DEV_CONFIG ?= ./config.dev.local.yml
 PROD_CONFIG ?= ./config.prod.local.yml
 
-.PHONY: help lint lint-go lint-frontend test test-unit test-integration test-frontend test-e2e test-all build-api build-worker frontend-build dev-init dev-up dev-down dev-api dev-worker dev-frontend prod-init prod-up prod-down prod-api prod-worker
+.PHONY: help lint lint-go lint-frontend test test-unit test-integration test-frontend test-e2e test-all build-api build-worker frontend-build admin dev-init dev-up dev-down dev-api dev-worker dev-admin dev-frontend prod-init prod-up prod-down prod-api prod-worker prod-admin
 
 help:
 	@printf '%s\n' \
@@ -21,6 +21,7 @@ help:
 	'  make dev-down      停止开发依赖' \
 	'  make dev-api       启动 API（读取 config.dev.local.yml）' \
 	'  make dev-worker    启动 Worker（读取 config.dev.local.yml）' \
+	'  make dev-admin USERNAME=<用户名>  将开发环境用户提权为管理员' \
 	'  make dev-frontend  启动前端开发服务器' \
 	'' \
 	'单机生产基线:' \
@@ -29,6 +30,7 @@ help:
 	'  make prod-down     停止单机生产依赖' \
 	'  make prod-api      启动 API（读取 config.prod.local.yml）' \
 	'  make prod-worker   启动 Worker（读取 config.prod.local.yml）' \
+	'  make prod-admin USERNAME=<用户名> 将生产配置下用户提权为管理员' \
 	'' \
 	'校验与构建:' \
 	'  make lint' \
@@ -70,6 +72,11 @@ build-worker:
 frontend-build:
 	cd "frontend" && $(FRONTEND_PM) build
 
+admin:
+	@if [ -z "$(CONFIG)" ]; then echo "请通过 CONFIG=./config.dev.local.yml 指定配置文件"; exit 1; fi
+	@if [ -z "$(USERNAME)" ]; then echo "请通过 USERNAME=alice 指定用户名"; exit 1; fi
+	SNEAKERFLASH_CONFIG="$(CONFIG)" $(GO) run ./cmd/admin -username "$(USERNAME)"
+
 dev-init:
 	@if [ ! -f "$(DEV_ENV_FILE)" ]; then cp "$(DEV_ENV_TEMPLATE)" "$(DEV_ENV_FILE)"; fi
 	@if [ ! -f "$(DEV_CONFIG)" ]; then cp "config.dev.yml.example" "$(DEV_CONFIG)"; fi
@@ -85,6 +92,9 @@ dev-api: dev-init
 
 dev-worker: dev-init
 	SNEAKERFLASH_CONFIG="$(DEV_CONFIG)" $(GO) run ./cmd/worker
+
+dev-admin: dev-init
+	@$(MAKE) admin CONFIG="$(DEV_CONFIG)" USERNAME="$(USERNAME)"
 
 dev-frontend:
 	cd "frontend" && $(FRONTEND_PM) dev
@@ -104,3 +114,6 @@ prod-api: prod-init
 
 prod-worker: prod-init
 	SNEAKERFLASH_CONFIG="$(PROD_CONFIG)" $(GO) run ./cmd/worker
+
+prod-admin: prod-init
+	@$(MAKE) admin CONFIG="$(PROD_CONFIG)" USERNAME="$(USERNAME)"

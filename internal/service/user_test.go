@@ -2,6 +2,7 @@ package service
 
 import (
 	"SneakerFlash/internal/model"
+	"SneakerFlash/internal/pkg/utils"
 	"SneakerFlash/internal/repository"
 	"SneakerFlash/internal/testutil"
 	"context"
@@ -108,5 +109,61 @@ func TestUserService_UpdateProfileRejectsDuplicateName(t *testing.T) {
 	dup := "bob"
 	if _, err := svc.UpdateProfile(ctx, 1, &dup, nil); !errors.Is(err, ErrUserExited) {
 		t.Fatalf("UpdateProfile() error = %v, want %v", err, ErrUserExited)
+	}
+}
+
+func TestUserService_PromoteToAdmin(t *testing.T) {
+	svc, repo, _ := newUserServiceForTest(t)
+	ctx := context.Background()
+
+	if err := svc.Register(ctx, "alice", "password-123"); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	if err := svc.PromoteToAdmin(ctx, "alice"); err != nil {
+		t.Fatalf("PromoteToAdmin() error = %v", err)
+	}
+
+	user, err := repo.GetByUsername(ctx, "alice")
+	if err != nil {
+		t.Fatalf("GetByUsername() error = %v", err)
+	}
+	if user.Role != model.UserRoleAdmin {
+		t.Fatalf("role = %q, want %q", user.Role, model.UserRoleAdmin)
+	}
+
+	if err := svc.PromoteToAdmin(ctx, "alice"); err != nil {
+		t.Fatalf("PromoteToAdmin() second call error = %v", err)
+	}
+}
+
+func TestUserService_RefreshUsesCurrentRole(t *testing.T) {
+	svc, repo, _ := newUserServiceForTest(t)
+	ctx := context.Background()
+
+	if err := svc.Register(ctx, "alice", "password-123"); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	_, refresh, err := svc.Login(ctx, "alice", "password-123")
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	if err := repo.UpdateProfile(ctx, 1, map[string]any{"role": model.UserRoleAdmin}); err != nil {
+		t.Fatalf("UpdateProfile(role) error = %v", err)
+	}
+
+	access, err := svc.Refresh(ctx, refresh)
+	if err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	claims, err := utils.ParshToken(access)
+	if err != nil {
+		t.Fatalf("ParshToken() error = %v", err)
+	}
+	if claims.Role != model.UserRoleAdmin {
+		t.Fatalf("claims.Role = %q, want %q", claims.Role, model.UserRoleAdmin)
 	}
 }

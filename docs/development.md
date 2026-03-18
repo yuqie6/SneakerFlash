@@ -3,7 +3,6 @@
 ## 适用对象
 - 初次接手项目的开发者
 - 需要恢复本地环境的维护者
-- 调整后端链路、前端交互或文档体系的贡献者
 
 ## 环境要求
 | 依赖 | 建议版本 | 用途 |
@@ -67,6 +66,7 @@ make lint-go
 make test
 make build-api
 make build-worker
+make dev-admin USERNAME=alice
 ```
 
 ### Frontend
@@ -89,6 +89,21 @@ swag init -g ./cmd/api/main.go -o ./docs
 5. 更新相关文档
 6. 在 `governance.md` 记录重要文档变更
 
+## 管理员提权命令
+- 本地调试管理后台时，不需要手动执行 SQL。
+- 先注册一个普通用户，再运行：
+
+```bash
+make dev-admin USERNAME=alice
+```
+
+- 成功后重新登录该用户，新的 JWT 会带上 `role=admin`。
+- 如果你使用的是非默认配置文件，可改用：
+
+```bash
+make admin CONFIG=./config.dev.local.yml USERNAME=alice
+```
+
 ## 模块协作约束
 ### 后端
 - 保持 `handler -> service -> repository` 分层边界
@@ -98,7 +113,7 @@ swag init -g ./cmd/api/main.go -o ./docs
 ### 前端
 - API 统一走 `frontend/src/lib/api.ts`
 - 共享状态优先放在 Pinia store
-- 保持 Editorial 视觉风格一致：浅底纸张层次、硬边细边框、克制动效
+- 保持视觉风格统一：浅色背景、硬边细边框、动效从简
 
 ## 代码检查
 ### Go
@@ -134,7 +149,7 @@ swag init -g ./cmd/api/main.go -o ./docs
 ## 开发中最常见的问题
 - Snowflake 初始化失败：缺少 `server.machineid`
 - Docker 拉镜像失败：Docker daemon 仍绑定旧代理
-- 秒杀永远 pending：Worker 未启动、Kafka 不通、Outbox 补偿未生效
+- 秒杀永远 pending：Worker 未启动、Kafka 不通、消息补偿任务未生效
 - Kafka topic 缺失：确认 `kafka-init` 一次性任务已执行成功，或手动执行 topic 创建命令
 
 更详细的排查手册见 `troubleshooting.md`

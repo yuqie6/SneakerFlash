@@ -79,6 +79,28 @@ func (r *UserRepo) UpdateGrowth(ctx context.Context, userID uint, totalSpentCent
 	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
 }
 
+func (r *UserRepo) ListAll(ctx context.Context, page, pageSize int) ([]model.User, int64, error) {
+	var users []model.User
+	var total int64
+
+	db := r.db.WithContext(ctx).Model(&model.User{})
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := db.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
+func (r *UserRepo) CountAll(ctx context.Context) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Model(&model.User{}).Count(&total).Error
+	return total, err
+}
+
 // ListAllWithGrowthLevel 查询所有成长等级 >= minLevel 的用户（用于月度发券定时任务）。
 func (r *UserRepo) ListAllWithGrowthLevel(ctx context.Context, minLevel int) ([]model.User, error) {
 	var users []model.User

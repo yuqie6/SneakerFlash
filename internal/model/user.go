@@ -2,6 +2,11 @@ package model
 
 import "gorm.io/gorm"
 
+const (
+	UserRoleUser  = "user"
+	UserRoleAdmin = "admin"
+)
+
 type User struct {
 	gorm.Model
 	Username        string  `gorm:"type:varchar(50);unique;not null" json:"username"`
@@ -10,6 +15,7 @@ type User struct {
 	Avatar          string  `gorm:"type:varchar(255);default:''" json:"avatar"`
 	TotalSpentCents int64   `gorm:"type:bigint;default:0;not null" json:"total_spent_cents"`
 	GrowthLevel     int     `gorm:"type:int;default:1;not null" json:"growth_level"`
+	Role            string  `gorm:"type:varchar(20);default:'user';not null" json:"role"`
 }
 
 func (User) TableName() string {

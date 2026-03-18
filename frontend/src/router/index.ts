@@ -1,8 +1,8 @@
-import { createRouter, createWebHistory, type RouterHistory } from "vue-router"
+import { createRouter, createWebHistory, type RouteRecordRaw, type RouterHistory } from "vue-router"
 import Home from "@/views/Home/Index.vue"
 import { useUserStore } from "@/stores/userStore"
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   { path: "/", name: "home", component: Home },
   { path: "/login", name: "login", component: () => import("@/views/Auth/Login.vue") },
   { path: "/register", name: "register", component: () => import("@/views/Auth/Register.vue") },
@@ -43,21 +43,45 @@ const routes = [
     meta: { requiresAuth: true },
     props: true,
   },
-] as const
+  {
+    path: "/admin",
+    component: () => import("@/views/Admin/Layout.vue"),
+    meta: { requiresAuth: true, requiresAdmin: true },
+    children: [
+      { path: "", name: "admin-dashboard", component: () => import("@/views/Admin/Dashboard.vue") },
+      { path: "users", name: "admin-users", component: () => import("@/views/Admin/Users.vue") },
+      { path: "orders", name: "admin-orders", component: () => import("@/views/Admin/Orders.vue") },
+      { path: "coupons", name: "admin-coupons", component: () => import("@/views/Admin/Coupons.vue") },
+      { path: "products", name: "admin-products", component: () => import("@/views/Admin/Products.vue") },
+      { path: "risk", name: "admin-risk", component: () => import("@/views/Admin/Risk.vue") },
+    ],
+  },
+]
 
 export function createAppRouter(history: RouterHistory = createWebHistory()) {
   const router = createRouter({
     history,
-    routes: [...routes],
+    routes,
   })
 
-  router.beforeEach((to, _from, next) => {
+  router.beforeEach(async (to) => {
     const userStore = useUserStore()
+
     if (to.meta.requiresAuth && !userStore.accessToken) {
-      next({ name: "login", query: { redirect: to.fullPath } })
-      return
+      return { name: "login", query: { redirect: to.fullPath } }
     }
-    next()
+
+    if (to.meta.requiresAdmin) {
+      await userStore.fetchProfile()
+      if (!userStore.profile) {
+        return { name: "login", query: { redirect: to.fullPath } }
+      }
+      if (userStore.profile.role !== "admin") {
+        return { name: "home" }
+      }
+    }
+
+    return true
   })
 
   return router
