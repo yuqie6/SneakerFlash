@@ -1,57 +1,49 @@
 # Repository Guidelines
 
-## 项目概览
-- 后端：Go（Gin + GORM + Redis + Kafka + Viper），入口 `cmd/api`（HTTP）与 `cmd/worker`（Kafka 消费），业务与基础设施在 `internal/` 分层。
-- 前端：Vue 3 + TypeScript + Vite + Tailwind，Pinia + Vue Router，动效 Lenis/Motion-v，UI 组件位于 `frontend/src/components/ui` 与 `components/motion`，入口 `frontend/src/main.ts`。
-- 文档：总入口 `README.md`、文档中心 `docs/README.md`、接口 `docs/backend-api.md`、前端方案 `docs/frontend-plan.md`、开发指南 `docs/development.md`、配置说明 `docs/configuration.md`、运维手册 `docs/operations.md`、排障手册 `docs/troubleshooting.md`、阶段路线 `docs/plan.md`，Swagger 产物在 `docs/swagger.*`。
-- 压测/工具：`perf/k6-seckill.js`、`perf/export_tokens.go`；静态上传目录 `uploads/`（git 忽略）。
+## 核心上下文
+- 后端：Go（Gin + GORM + Redis + Kafka + Viper），入口为 `cmd/api` 与 `cmd/worker`，业务代码位于 `internal/`。
+- 前端：Vue 3 + TypeScript + Vite + Tailwind，入口为 `frontend/src/main.ts`，主要页面与状态在 `frontend/src/views`、`frontend/src/stores`。
+- 文档：`README.md` 与 `docs/README.md` 是恢复上下文入口；`docs/*.md` 是事实来源，`AGENTS.md` 只保留仓库级约束。
+- Agent 上下文：优先使用 `skills/` 下的 SneakerFlash skills 按任务加载文档，不要把任务细节长期堆在 `AGENTS.md`。
 
-## 运行与配置
-- Go >=1.22（go.mod 声明 1.25.1）；首次运行 `go mod tidy`。
-- 配置：统一通过 `SNEAKERFLASH_CONFIG` 指向本地 `config.<env>.local.yml`；推荐使用 `make dev-init` / `make prod-init` 生成本地文件；核心字段示例：
-  ```yaml
-  server: { port: ":8000", machineid: 1, upload_dir: "uploads" }
-  data:
-    database: { host, port, user, password, dbname, log_lever, max_idle, max_open, max_lifetime, slow_threshold_ms }
-    redis: { addr, password, db, pool_size, min_idle, conn_timeout }
-    kafka: { brokers: ["127.0.0.1:9092"], topic: "seckill-order" }
-  jwt: { secret: "change-me", expried: 3600, refresh_expried: 86400 }
-  risk:
-    enable: false
-    login_rate: { rate: 5, burst: 10 }
-    seckill_rate: { rate: 50, burst: 80 }
-    pay_rate: { rate: 10, burst: 20 }
-    product_rate: { rate: 1000, burst: 1000 }
-    hotspot_burst: 100
-  log: { level: "info", path: "log/api.log", max_age: 7, max_backups: 3, max_size: 100 }
-  ```
-- 启动：优先使用 `make dev-up` / `make dev-api` / `make dev-worker`，或显式设置 `SNEAKERFLASH_CONFIG` 后再执行 `go run ./cmd/api`、`go run ./cmd/worker`；依赖 MySQL/Redis/Kafka，配置需与本地一致。
-- 前端：在 `frontend/` 运行 `pnpm install`，`pnpm dev` / `pnpm build` / `pnpm preview`；API 基址默认 `http://localhost:8000/api/v1`，可用 `VITE_API_BASE_URL` 覆盖。
+## 技能索引
+- `sneakerflash-backend`：后端功能开发、接口联调、业务规则修改、Go 测试。
+- `sneakerflash-frontend`：前端页面开发、交互调整、状态管理、前端测试。
+- `sneakerflash-ops`：本地运行、依赖编排、压测、运行环境核查。
+- `sneakerflash-troubleshooting`：故障定位、日志核查、标准化排障。
+- `sneakerflash-doc-maintainer`：代码变更后的文档同步与入口维护。
 
-## 后端开发规范
-- 分层：handler -> service -> repository，仓储/服务提供 `WithContext`；统一响应 `{code,msg,data}`，错误码定义在 `internal/pkg/e`（包含 401/429/7xx 风控码）。
-- 中间件：`middlerware` 内含 JWT、slog、Lua 令牌桶与黑/灰名单；`risk.enable` 开启后对登录/秒杀/支付/热点参数限流；静态上传通过 `/uploads` 暴露，CORS 已放通本地 5173。
-- 业务要点：秒杀依赖 Redis Lua + Kafka，发送失败会回滚库存；订单/支付幂等在 `service/order.go`，支付回调校验状态；Snowflake 依赖 `server.machineid`，未配置会导致启动失败。
-- 代码风格：`gofmt`/`goimports`；错误处理用 `fmt.Errorf(...%w...)` + `errors.Is`，不要新引入 `errors.Wrap`；避免跨层直接访问底层资源；日志用 `internal/pkg/logger`（slog+lumberjack）。
+## 通用不变式
+- 配置统一通过 `SNEAKERFLASH_CONFIG` 指向本地 `config.<env>.local.yml`；优先复用 `make dev-init`、`make prod-init`。
+- 不提交真实密钥、连接串、上传调试产物；`config.*.local.yml`、`.env*.local`、`uploads/` 保持忽略。
+- 未经用户明确要求，不要执行 `git commit`、`git push`、创建/切换分支、重置历史。
+- 新增或修改能力时保持 KISS、YAGNI、DRY；先复用现有实现，再做最小必要改动。
 
-## 前端开发规范
-- 入口与布局：`src/main.ts` 注册 Pinia/Router/Lenis；页面布局在 `layout/MainLayout.vue`。
-- UI/样式：Tailwind 现为 Editorial 主题（`tailwind.config.js`、`assets/css/index.css`），基础色为 `#F9F8F6` / `#FFFFFF` / `#1C1C1C`，基础组件在 `components/ui`（CVA 驱动），动效组件在 `components/motion`；优先复用现有组件/样式，不要重复引入 UI 库。
-- 数据与状态：`lib/api.ts` 统一请求（校验 `code!=200` 抛错、自动 refresh token、本地键 `access_token`/`refresh_token`，含 `uploadImage`/`resolveAssetUrl`），组件或 store 通过该封装调用；已存在 store：`stores/userStore`、`stores/productStore`，其他页面可按需新增但保持相同模式。
-- 路由：`router/index.ts` 管理，`meta.requiresAuth` 需依赖用户态；视图按功能存放在 `views/`（Auth/Home/Product/Orders/User）。
-- 设计基调：Editorial 杂志感、浅底纸张层次、硬边细边框、克制动效（参考 `Home`/`Product` 页面），保持一致风格。
+## 后端约束
+- 严格保持 `handler -> service -> repository` 分层，仓储/服务继续使用 `WithContext`。
+- 统一响应格式保持 `{ code, msg, data }`，错误码定义集中在 `internal/pkg/e`。
+- 错误处理使用 `fmt.Errorf(... %w ...)` 与 `errors.Is`，不要新引入 `errors.Wrap`。
+- 日志继续走 `internal/pkg/logger`；不要跨层直接访问底层资源。
+- 涉及秒杀、订单、支付时，优先保护 Redis Lua 原子扣减、失败回滚、订单幂等、支付回调状态推进。
+- `server.machineid` 是启动前置条件；涉及启动逻辑时不要破坏 Snowflake 初始化要求。
 
-## 测试与验证
-- 当前无自动化测试，改动核心逻辑（库存扣减、订单、限流、支付回调等）请补 Go 表驱动用例并确保 `go test ./...` 通过。
-- Go 代码检查统一使用根目录 `.golangci.yml`；后端改动完成后至少执行 `golangci-lint run ./...`，优先修复本次改动直接引入的问题。
-- 前端如新增复杂交互可引入/补充 Vitest + vue-test-utils（目前未配置），至少保证 `pnpm build`/`vue-tsc -b` 通过。
-- 压测需参考 `docs/perf.md` 与 `perf/` 脚本，必要时关闭/调低限流再跑 k6。
+## 前端约束
+- 保持 Editorial 视觉基调：浅底纸张层次、硬边细边框、克制动效；避免引入新的 UI 库破坏现有体系。
+- 优先复用 `frontend/src/components/ui`、`frontend/src/components/motion`、`frontend/src/layout/MainLayout.vue`。
+- 请求与鉴权逻辑继续经由 `frontend/src/lib/api.ts`；token 键保持 `access_token`、`refresh_token`。
+- 新增状态管理优先遵循 `frontend/src/stores/userStore.ts`、`frontend/src/stores/productStore.ts` 的模式。
+- 路由鉴权继续使用 `meta.requiresAuth` 与现有用户态守卫。
 
-## 文档约束
-- `README.md` 是项目总入口，`docs/README.md` 是文档目录入口；新增能力、运行方式、配置项、接口契约变化时必须同步更新对应文档。
-- 后端接口变更至少同步 `docs/backend-api.md` 或 `docs/swagger.*`；前端结构或交互方案调整时同步 `docs/frontend-plan.md`。
-- 运维、排障、依赖启动方式变更时补充到运维类文档，避免关键信息只留在对话或提交记录里。
+## 验证基线
+- 后端改动至少运行相关 `go test`；涉及主链路、集成或跨模块行为时运行 `make test`、`make test-integration`。
+- 后端代码检查使用根目录 `.golangci.yml`；后端改动完成后优先执行 `golangci-lint run ./...`。
+- 前端改动至少保证 `pnpm build` 或 `make test-frontend` 相关检查通过；交互主链路改动时补跑 `make test-e2e`。
+- 当前测试现状与覆盖范围以 `docs/testing.md` 为准，不要在 `AGENTS.md` 重复维护细表。
 
-## 提交与安全
-- Commit 信息用简洁中文动词短语，一次聚焦单主题；涉及接口/交互变更同步 `docs/backend-api.md` 或在 PR 说明，对照 `docs/frontend-plan.md`。
-- 不要提交真实密钥/连接串；`config.*.local.yml`、`.env*.local`、`uploads/` 已忽略，上传文件仅用于本地调试。
+## 文档同步
+- 接口或契约变化：更新 `docs/backend-api.md` 与 `docs/swagger.*`。
+- 配置变化：更新 `docs/configuration.md`。
+- 启动、编排、运维、压测、排障变化：更新 `docs/operations.md`、`docs/troubleshooting.md`、`docs/perf.md`。
+- 前端结构或交互变化：更新 `docs/frontend-plan.md`。
+- 测试基线变化：更新 `docs/testing.md`。
+- 阶段完成度、维护规则、文档入口变化：更新 `docs/plan.md`、`docs/governance.md`、`docs/README.md`。

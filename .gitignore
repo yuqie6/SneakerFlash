@@ -15,6 +15,7 @@ uploads
 # IDE和编辑器
 .vscode/
 .idea/
+.codex/
 *.swp
 *.swo
 *~

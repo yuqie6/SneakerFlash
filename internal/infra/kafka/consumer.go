@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -51,7 +52,8 @@ func StartBatchConsumer(cfg config.KafkaConfig, handler BatchMessageHandler) {
 		maxRetries:    maxRetries,
 		dlqTopic:      cfg.DLQTopic,
 		topic:         cfg.Topic,
-		retryCount:    make(map[string]int),
+		retryStore:    newRetryStore(),
+		sendToDLQ:     SendToDLQ,
 	}
 
 	log.Printf("[INFO] Worker 正在监听 kafka topic: %s (group_id=%s, initial_offset=%s, batch_size=%d, flush_interval=%dms, max_retries=%d, dlq_topic=%s)",
@@ -107,8 +109,8 @@ type BatchConsumerHandler struct {
 	maxRetries    int
 	dlqTopic      string
 	topic         string
-	retryCount    map[string]int // key: partition:offset, value: retry count
-	retryMu       sync.RWMutex
+	retryStore    retryStore
+	sendToDLQ     func(string, DLQMessage) error
 }
 
 func (h *BatchConsumerHandler) Setup(_ sarama.ConsumerGroupSession) error   { return nil }
@@ -197,9 +199,7 @@ func (h *BatchConsumerHandler) flushLocked() {
 
 	// 全部成功，批量确认 offset
 	for _, item := range h.buffer {
-		item.sess.MarkMessage(item.msg, "")
-		// 清理重试计数
-		h.removeRetryCount(item.msg)
+		h.ackMessage(item)
 	}
 
 	log.Printf("[INFO] 批量处理成功 (count=%d, elapsed=%v, tps=%.0f)",
@@ -211,8 +211,12 @@ func (h *BatchConsumerHandler) flushLocked() {
 
 // handleBatchFailure 处理批量全部失败的情况
 func (h *BatchConsumerHandler) handleBatchFailure(lastErr error) {
+	errStr := "unknown error"
+	if lastErr != nil {
+		errStr = lastErr.Error()
+	}
 	for _, item := range h.buffer {
-		h.handleFailedMessage(item, lastErr)
+		h.handleFailedMessage(item, errStr)
 	}
 	h.buffer = h.buffer[:0]
 }
@@ -224,26 +228,57 @@ func (h *BatchConsumerHandler) handlePartialFailure(failedIndexes []int) {
 		failedSet[idx] = true
 	}
 
+	type partitionKey struct {
+		topic     string
+		partition int32
+	}
+	type bufferedResult struct {
+		item   msgWithSession
+		failed bool
+	}
+
+	grouped := make(map[partitionKey][]bufferedResult)
 	for i, item := range h.buffer {
-		if failedSet[i] {
-			h.handleFailedMessage(item, nil)
-		} else {
-			// 成功的消息，确认 offset
-			item.sess.MarkMessage(item.msg, "")
-			h.removeRetryCount(item.msg)
+		key := partitionKey{topic: item.msg.Topic, partition: item.msg.Partition}
+		grouped[key] = append(grouped[key], bufferedResult{
+			item:   item,
+			failed: failedSet[i],
+		})
+	}
+
+	for _, results := range grouped {
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].item.msg.Offset < results[j].item.msg.Offset
+		})
+
+		blocked := false
+		for _, result := range results {
+			if result.failed {
+				if !h.handleFailedMessage(result.item, "message processing failed") {
+					blocked = true
+				}
+				continue
+			}
+
+			if blocked {
+				log.Printf("[INFO] 跳过确认成功消息，等待前序失败消息完成重试: topic=%s, partition=%d, offset=%d",
+					result.item.msg.Topic, result.item.msg.Partition, result.item.msg.Offset)
+				continue
+			}
+
+			h.ackMessage(result.item)
 		}
 	}
 	h.buffer = h.buffer[:0]
 }
 
 // handleFailedMessage 处理单条失败消息
-func (h *BatchConsumerHandler) handleFailedMessage(item msgWithSession, lastErr error) {
+func (h *BatchConsumerHandler) handleFailedMessage(item msgWithSession, errStr string) bool {
 	key := msgKey(item.msg)
-	retryCount := h.getAndIncrRetryCount(key)
+	retryCount := h.getAndIncrRetryCount(item.sess.Context(), key)
 
-	errStr := "unknown error"
-	if lastErr != nil {
-		errStr = lastErr.Error()
+	if errStr == "" {
+		errStr = "unknown error"
 	}
 
 	if retryCount >= h.maxRetries {
@@ -252,35 +287,59 @@ func (h *BatchConsumerHandler) handleFailedMessage(item msgWithSession, lastErr 
 			retryCount, h.maxRetries, item.msg.Topic, item.msg.Partition, item.msg.Offset)
 
 		dlqMsg := NewDLQMessage(item.msg.Topic, item.msg.Value, retryCount, errStr)
-		if err := SendToDLQ(h.dlqTopic, dlqMsg); err != nil {
+		if err := h.sendDLQ(h.dlqTopic, dlqMsg); err != nil {
 			log.Printf("[ERROR] 投递 DLQ 失败: %v", err)
 		}
 
 		// 标记消息已处理（即使 DLQ 失败也要 ack，避免无限重试）
-		item.sess.MarkMessage(item.msg, "")
-		h.removeRetryCount(item.msg)
+		h.ackMessage(item)
+		return true
 	} else {
 		// 未达到最大重试次数，不 MarkMessage，让 Kafka 重新投递
 		log.Printf("[INFO] 消息处理失败，等待重试 (%d/%d): topic=%s, partition=%d, offset=%d",
 			retryCount, h.maxRetries, item.msg.Topic, item.msg.Partition, item.msg.Offset)
 		// 不 MarkMessage，Kafka 会在 rebalance 或 session 超时后重新投递
 		// 注意：这种方式可能导致重复消费，业务层需要保证幂等
+		return false
 	}
 }
 
+func (h *BatchConsumerHandler) ackMessage(item msgWithSession) {
+	item.sess.MarkMessage(item.msg, "")
+	h.removeRetryCount(item.sess.Context(), item.msg)
+}
+
+func (h *BatchConsumerHandler) sendDLQ(dlqTopic string, msg DLQMessage) error {
+	if h.sendToDLQ != nil {
+		return h.sendToDLQ(dlqTopic, msg)
+	}
+	return SendToDLQ(dlqTopic, msg)
+}
+
 // getAndIncrRetryCount 获取并增加重试次数
-func (h *BatchConsumerHandler) getAndIncrRetryCount(key string) int {
-	h.retryMu.Lock()
-	defer h.retryMu.Unlock()
-	count := h.retryCount[key] + 1
-	h.retryCount[key] = count
+func (h *BatchConsumerHandler) getAndIncrRetryCount(ctx context.Context, key string) int {
+	if h.retryStore == nil {
+		return 1
+	}
+	count, err := h.retryStore.Incr(ctx, key)
+	if err != nil {
+		if count > 0 {
+			log.Printf("[WARN] 记录消费重试次数时设置过期失败，继续使用当前计数: key=%s, count=%d, err=%v", key, count, err)
+			return count
+		}
+		log.Printf("[WARN] 记录消费重试次数失败，降级为单次重试: key=%s, err=%v", key, err)
+		return 1
+	}
 	return count
 }
 
 // removeRetryCount 移除重试计数
-func (h *BatchConsumerHandler) removeRetryCount(msg *sarama.ConsumerMessage) {
+func (h *BatchConsumerHandler) removeRetryCount(ctx context.Context, msg *sarama.ConsumerMessage) {
+	if h.retryStore == nil {
+		return
+	}
 	key := msgKey(msg)
-	h.retryMu.Lock()
-	defer h.retryMu.Unlock()
-	delete(h.retryCount, key)
+	if err := h.retryStore.Delete(ctx, key); err != nil {
+		log.Printf("[WARN] 清理消费重试次数失败: key=%s, err=%v", key, err)
+	}
 }
