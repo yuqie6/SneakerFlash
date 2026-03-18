@@ -46,9 +46,8 @@ onMounted(() => {
         </RouterLink>
         <nav class="flex items-center gap-6">
           <RouterLink :class="navClass('/')" to="/">抢购大厅</RouterLink>
+          <RouterLink v-if="isLoggedIn" :class="navClass('/orders')" to="/orders">订单</RouterLink>
           <RouterLink v-if="isLoggedIn" :class="navClass('/vip')" to="/vip">权益中心</RouterLink>
-          <RouterLink v-if="isLoggedIn" :class="navClass('/orders')" to="/orders">订单中心</RouterLink>
-          <RouterLink v-if="isLoggedIn" :class="navClass('/products/publish')" to="/products/publish">发布商品</RouterLink>
           <RouterLink v-if="isLoggedIn" :class="navClass('/profile')" to="/profile">个人中心</RouterLink>
           <RouterLink v-if="!isLoggedIn" :class="navClass('/login')" to="/login">登录</RouterLink>
           <RouterLink v-if="!isLoggedIn" :class="navClass('/register')" to="/register">注册</RouterLink>
@@ -72,5 +71,11 @@ onMounted(() => {
     <main class="flex-1">
       <slot />
     </main>
+    <footer class="border-t border-[#1C1C1C]/10">
+      <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-8 text-xs text-[#1C1C1C]/40">
+        <span class="font-serif">SneakerFlash</span>
+        <span>限量球鞋 · 先到先得</span>
+      </div>
+    </footer>
   </div>
 </template>

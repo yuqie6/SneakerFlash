@@ -2,11 +2,15 @@
 import { onMounted, reactive } from "vue"
 import { RouterLink } from "vue-router"
 import MainLayout from "@/layout/MainLayout.vue"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import MagmaButton from "@/components/motion/MagmaButton.vue"
-import api from "@/lib/api"
+import { useProductStore } from "@/stores/productStore"
+import api, { resolveAssetUrl } from "@/lib/api"
+import { formatPrice } from "@/lib/utils"
 import type { Order } from "@/types/order"
 import { toast } from "vue-sonner"
+
+const productStore = useProductStore()
 
 const state = reactive({
   items: [] as Order[],
@@ -32,6 +36,8 @@ const fetchOrders = async () => {
     })
     state.items = res.list
     state.total = res.total
+    const ids = [...new Set(res.list.map((o) => o.product_id).filter(Boolean))]
+    await Promise.allSettled(ids.map((id) => productStore.fetchProductDetail(id)))
   } catch (err: any) {
     toast.error(err?.message || "获取订单失败")
   } finally {
@@ -54,16 +60,20 @@ const onPage = (delta: number) => {
 
 const statusText = (s: number) => {
   switch (s) {
-    case 0:
-      return "待支付"
-    case 1:
-      return "已支付"
-    case 2:
-      return "支付失败"
-    default:
-      return "未知"
+    case 0: return "待支付"
+    case 1: return "已支付"
+    case 2: return "支付失败"
+    default: return "未知"
   }
 }
+const statusTone = (s: number) => {
+  switch (s) {
+    case 0: return "text-[#1C1C1C]/60"
+    case 1: return "text-[#1C1C1C]"
+    default: return "text-[#1C1C1C]/30"
+  }
+}
+const productCover = (src?: string) => resolveAssetUrl(src) || "https://dummyimage.com/120x120/F9F8F6/1C1C1C&text=·"
 
 onMounted(fetchOrders)
 </script>
@@ -95,29 +105,33 @@ onMounted(fetchOrders)
         </div>
       </div>
 
-      <div v-if="state.loading" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <div v-for="i in 6" :key="i" class="h-36 animate-pulse border border-[#1C1C1C]/10 bg-[#1C1C1C]/5"></div>
+      <div v-if="state.loading" class="grid gap-4 md:grid-cols-2">
+        <div v-for="i in 4" :key="i" class="h-28 animate-pulse border border-[#1C1C1C]/10 bg-[#1C1C1C]/5"></div>
       </div>
 
       <div v-else-if="state.items.length === 0" class="border border-[#1C1C1C]/10 p-8 text-center text-[#1C1C1C]/40">
         暂无订单，去抢购或发布商品吧。
       </div>
 
-      <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card v-for="order in state.items" :key="order.id" class="hover:border-[#1C1C1C]/30">
-          <CardHeader class="space-y-2">
-            <CardTitle class="font-serif text-lg tracking-tight">{{ order.order_num }}</CardTitle>
-            <CardDescription class="text-[#1C1C1C]/40">状态：{{ statusText(order.status) }}</CardDescription>
-          </CardHeader>
-          <CardContent class="flex items-center justify-between">
-            <RouterLink
-              :to="`/orders/${order.id}`"
-              class="hover-underline text-sm text-[#1C1C1C]"
-            >
-              查看详情 / 支付
-            </RouterLink>
-            <span class="text-xs text-[#1C1C1C]/40">{{ order.created_at }}</span>
-          </CardContent>
+      <div v-else class="grid gap-4 md:grid-cols-2">
+        <Card v-for="order in state.items" :key="order.id" class="overflow-hidden hover:border-[#1C1C1C]/30">
+          <RouterLink :to="`/orders/${order.id}`" class="flex gap-4 p-4">
+            <img
+              :src="productCover(productStore.detail(order.product_id)?.image)"
+              :alt="productStore.detail(order.product_id)?.name || ''"
+              class="h-20 w-20 shrink-0 border border-[#1C1C1C]/10 object-cover"
+            />
+            <div class="flex min-w-0 flex-1 flex-col justify-between">
+              <div>
+                <h3 class="truncate font-serif text-lg tracking-tight">{{ productStore.detail(order.product_id)?.name || "商品加载中..." }}</h3>
+                <p class="mt-1 text-lg">{{ formatPrice(productStore.detail(order.product_id)?.price || 0) }}</p>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-[#1C1C1C]/40">{{ order.order_num }} · {{ order.created_at }}</span>
+                <span class="shrink-0 border border-[#1C1C1C]/10 px-2 py-0.5 text-xs" :class="statusTone(order.status)">{{ statusText(order.status) }}</span>
+              </div>
+            </div>
+          </RouterLink>
         </Card>
       </div>
 
