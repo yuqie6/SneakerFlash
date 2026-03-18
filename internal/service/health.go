@@ -13,6 +13,8 @@ import (
 
 const healthServiceName = "SneakerFlash"
 
+var kafkaPing = kafka.Ping
+
 type HealthService struct{}
 
 type ProbeStatus struct {
@@ -75,7 +77,7 @@ func (s *HealthService) Ready(ctx context.Context) (ReadinessStatus, error) {
 		notReady = append(notReady, "redis")
 	}
 
-	if err := kafka.Ping(config.Conf.Data.Kafka.Topic); err != nil {
+	if err := kafkaPing(config.Conf.Data.Kafka.Topic); err != nil {
 		status.Checks.Kafka = ProbeStatus{Status: "down", Detail: err.Error()}
 		notReady = append(notReady, "kafka")
 	}

@@ -66,6 +66,11 @@ var (
 	ErrSeckillEnded    = errors.New("活动已结束")
 )
 
+var (
+	genSeckillID     = utils.GenSnowflakeID
+	sendKafkaMessage = kafka.Send
+)
+
 // SeckillResult 秒杀接口返回，前端据此轮询订单状态。
 type SeckillResult struct {
 	OrderID   uint   `json:"order_id,omitempty"`
@@ -115,14 +120,14 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 	}
 
 	// 4. 抢到了, 生成订单号/支付号，准备消息
-	orderNum, err := utils.GenSnowflakeID()
+	orderNum, err := genSeckillID()
 	if err != nil {
 		// 回滚 Redis
 		redis.RDB.Incr(ctx, stockKey)
 		redis.RDB.SRem(ctx, userSetKey, userID)
 		return nil, ErrSeckillBusy
 	}
-	paymentID, err := utils.GenSnowflakeID()
+	paymentID, err := genSeckillID()
 	if err != nil {
 		redis.RDB.Incr(ctx, stockKey)
 		redis.RDB.SRem(ctx, userSetKey, userID)
@@ -187,7 +192,7 @@ func (s *SeckillService) Seckill(ctx context.Context, userID, productID uint) (*
 // sendOutboxMessage 异步发送 Outbox 消息到 Kafka
 func (s *SeckillService) sendOutboxMessage(msg *model.OutboxMessage) {
 	ctx := context.Background()
-	if err := kafka.Send(msg.Topic, msg.Payload); err != nil {
+	if err := sendKafkaMessage(msg.Topic, msg.Payload); err != nil {
 		slog.Warn("Kafka 发送失败，等待补偿任务处理", slog.Uint64("msg_id", uint64(msg.ID)), slog.Any("error", err))
 		return
 	}

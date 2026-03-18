@@ -18,7 +18,11 @@ export const useUserStore = defineStore("user", {
   actions: {
     setTokens(access: string, refresh?: string) {
       this.accessToken = access
-      if (refresh) this.refreshToken = refresh
+      if (refresh !== undefined) {
+        this.refreshToken = refresh
+      } else if (!access) {
+        this.refreshToken = ""
+      }
       if (access) {
         localStorage.setItem("access_token", access)
       } else {

@@ -11,6 +11,7 @@
 - **文档中心**：`docs/README.md`
 - **架构总览**：`docs/architecture.md`
 - **开发指南**：`docs/development.md`
+- **测试方案**：`docs/testing.md`
 - **运维与排障**：`docs/operations.md`
 - **配置说明**：`docs/configuration.md`
 - **故障排查**：`docs/troubleshooting.md`
@@ -80,6 +81,7 @@ pnpm dev
 ```bash
 make lint-go
 make test
+make test-integration
 make build-api
 make build-worker
 ```
@@ -87,12 +89,15 @@ make build-worker
 ### Frontend
 ```bash
 make lint-frontend
+make test-frontend
+make test-e2e
 make frontend-build
 ```
 
 ### Full Check
 ```bash
 make lint
+make test-all
 ```
 
 ## 核心业务链路

@@ -16,6 +16,10 @@ const clearTokens = () => {
   localStorage.removeItem("access_token")
   localStorage.removeItem("refresh_token")
 }
+export const redirectToLogin = () => {
+  if (import.meta.env.MODE === "test") return
+  window.location.href = "/login"
+}
 
 api.interceptors.request.use((config) => {
   const token = getAccessToken()
@@ -42,7 +46,7 @@ api.interceptors.response.use(
       const refreshToken = getRefreshToken()
       if (!refreshToken) {
         clearTokens()
-        window.location.href = "/login"
+        redirectToLogin()
         return Promise.reject(error)
       }
 
@@ -79,7 +83,7 @@ api.interceptors.response.use(
         clearTokens()
         refreshQueue.forEach((cb) => cb(null))
         refreshQueue = []
-        window.location.href = "/login"
+        redirectToLogin()
         return Promise.reject(refreshErr)
       } finally {
         isRefreshing = false

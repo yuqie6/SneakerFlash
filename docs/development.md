@@ -101,11 +101,20 @@ swag init -g ./cmd/api/main.go -o ./docs
 ### Frontend
 - `frontend/package.json` 中提供 `pnpm lint`
 - 构建即包含 `vue-tsc -b`
+- 测试命令：`pnpm test:unit`、`pnpm test:e2e`
+
+### 测试命令
+- 后端单元测试：`make test` 或 `make test-unit`
+- 后端集成测试：`make test-integration`
+- 前端单元测试：`make test-frontend`
+- 前端端到端测试：`make test-e2e`
+- 全量验证：`make test-all`
 
 ## 当前测试现状
 - 仓库当前未提交核心自动化测试
 - 对秒杀、订单、支付、限流等核心逻辑进行改动时，建议优先补表驱动测试
 - 压测与端到端演练目前主要依赖 `perf/` 脚本
+- 详细测试设计、目录约定与分阶段落地计划见 `testing.md`
 
 ## 开发中最常见的问题
 - Snowflake 初始化失败：缺少 `server.machineid`

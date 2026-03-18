@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -12,5 +13,5 @@ func isMySQLDuplicate(err error) bool {
 	if errors.As(err, &mysqlErr) {
 		return mysqlErr.Number == 1062
 	}
-	return false
+	return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

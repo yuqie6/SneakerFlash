@@ -14,6 +14,7 @@
 
 ### 开发与配置
 - `development.md`：本地开发、运行、lint、构建与协作流程
+- `testing.md`：测试分层、目录约定、CI 与落地计划
 - `configuration.md`：配置项说明、环境变量与常见取值建议
 
 ### 运维与排障
@@ -51,4 +52,3 @@
 - 配置变化：更新 `configuration.md`
 - 启动/运维变化：更新 `operations.md` 与 `troubleshooting.md`
 - 大版本演进：在 `governance.md` 记录变更背景、责任人和状态
-
