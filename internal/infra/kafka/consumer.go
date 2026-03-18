@@ -261,8 +261,8 @@ func (h *BatchConsumerHandler) handlePartialFailure(failedIndexes []int) {
 			}
 
 			if blocked {
-				log.Printf("[INFO] 跳过确认成功消息，等待前序失败消息完成重试: topic=%s, partition=%d, offset=%d",
-					result.item.msg.Topic, result.item.msg.Partition, result.item.msg.Offset)
+				log.Printf("[INFO] 跳过确认成功消息，等待前序失败消息完成重试: topic=%s, partition=%d, offset=%d, current_retry_key=%s, dlq_topic=%s",
+					result.item.msg.Topic, result.item.msg.Partition, result.item.msg.Offset, msgKey(result.item.msg), h.dlqTopic)
 				continue
 			}
 
@@ -283,12 +283,13 @@ func (h *BatchConsumerHandler) handleFailedMessage(item msgWithSession, errStr s
 
 	if retryCount >= h.maxRetries {
 		// 达到最大重试次数，投递到 DLQ
-		log.Printf("[WARN] 消息达到最大重试次数 (%d/%d)，投递到 DLQ: topic=%s, partition=%d, offset=%d",
-			retryCount, h.maxRetries, item.msg.Topic, item.msg.Partition, item.msg.Offset)
+		log.Printf("[WARN] 消息达到最大重试次数，投递到 DLQ: retry_key=%s, retry_count=%d, max_retries=%d, topic=%s, partition=%d, offset=%d, dlq_topic=%s",
+			key, retryCount, h.maxRetries, item.msg.Topic, item.msg.Partition, item.msg.Offset, h.dlqTopic)
 
 		dlqMsg := NewDLQMessage(item.msg.Topic, item.msg.Value, retryCount, errStr)
 		if err := h.sendDLQ(h.dlqTopic, dlqMsg); err != nil {
-			log.Printf("[ERROR] 投递 DLQ 失败: %v", err)
+			log.Printf("[ERROR] 投递 DLQ 失败: retry_key=%s, retry_count=%d, max_retries=%d, topic=%s, partition=%d, offset=%d, dlq_topic=%s, err=%v",
+				key, retryCount, h.maxRetries, item.msg.Topic, item.msg.Partition, item.msg.Offset, h.dlqTopic, err)
 		}
 
 		// 标记消息已处理（即使 DLQ 失败也要 ack，避免无限重试）
@@ -296,8 +297,8 @@ func (h *BatchConsumerHandler) handleFailedMessage(item msgWithSession, errStr s
 		return true
 	} else {
 		// 未达到最大重试次数，不 MarkMessage，让 Kafka 重新投递
-		log.Printf("[INFO] 消息处理失败，等待重试 (%d/%d): topic=%s, partition=%d, offset=%d",
-			retryCount, h.maxRetries, item.msg.Topic, item.msg.Partition, item.msg.Offset)
+		log.Printf("[INFO] 消息处理失败，等待重试: retry_key=%s, retry_count=%d, max_retries=%d, topic=%s, partition=%d, offset=%d, dlq_topic=%s",
+			key, retryCount, h.maxRetries, item.msg.Topic, item.msg.Partition, item.msg.Offset, h.dlqTopic)
 		// 不 MarkMessage，Kafka 会在 rebalance 或 session 超时后重新投递
 		// 注意：这种方式可能导致重复消费，业务层需要保证幂等
 		return false

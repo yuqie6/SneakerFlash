@@ -53,7 +53,7 @@ test-unit:
 	$(GO) test ./...
 
 test-integration:
-	$(GO) test -tags=integration ./internal/integration/...
+	$(GO) test -tags=integration ./internal/integration/... ./internal/infra/kafka
 
 test-frontend:
 	cd "frontend" && $(FRONTEND_PM) test:unit

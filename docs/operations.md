@@ -171,7 +171,31 @@ systemctl cat docker
 
 ### 死信
 - 超过重试阈值的消息进入 DLQ
+- 消费侧重试计数优先落在 Redis，key 形如 `kafka:consume:retry:<topic>:<partition>:<offset>`，用于跨 handler / rebalance 延续计数
+- 正常 ack 或消息进入 DLQ 后，会删除对应重试计数 key，避免脏状态残留
 - 建议对 DLQ 建立单独告警与处理手册
+
+### 验证与回归
+- 常规集成测试：`make test-integration`
+- 定向验证 Kafka 死信链路：
+```bash
+GOCACHE="/tmp/go-build" go test -tags=integration ./internal/infra/kafka -run TestBatchConsumerHandler_ConsumeToDLQWithRealKafka -count=1
+```
+- 默认使用开发环境 Kafka / Redis：`127.0.0.1:19092`、`127.0.0.1:16379`
+- 如需覆盖目标环境，可设置：`SNEAKERFLASH_KAFKA_IT_BROKERS`、`SNEAKERFLASH_REDIS_IT_ADDR`、`SNEAKERFLASH_REDIS_IT_PASSWORD`
+
+### 排障要点
+- 消费失败日志会带 `retry_key`、`retry_count`、`max_retries`、`dlq_topic`、`topic`、`partition`、`offset`
+- 若一直重试但未进入 DLQ，先检查 Redis 中对应 `kafka:consume:retry:*` key 是否持续增长，再确认 `dlq_topic` 是否存在
+- 若日志出现 `投递 DLQ 失败`，优先检查 Kafka topic 是否创建成功、worker 的 Kafka 连接是否正常
+- 若需要确认 topic 是否存在，可执行：
+```bash
+docker compose -f "docker-compose.dev.yaml" exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+```
+- 若需要确认 DLQ 是否已有消息，可执行：
+```bash
+docker compose -f "docker-compose.dev.yaml" exec -T kafka /opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server localhost:9092 --topic seckill-order-dlq
+```
 
 ### Kafka 基线
 - 开发与生产基线都关闭自动建 topic，由 `kafka-init` 显式创建 `seckill_orders` / `seckill-order-dlq`

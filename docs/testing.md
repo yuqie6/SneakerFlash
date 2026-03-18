@@ -3,7 +3,7 @@
 ## 当前现状（2026-03-18）
 ### 后端已落地
 - 单元测试已覆盖：JWT、密码工具、限流器、用户服务、订单服务、秒杀服务、优惠券服务、健康检查、Admin Handler。
-- 集成测试已覆盖：认证流程、支付流程、Worker 流程、管理后台流程。
+- 集成测试已覆盖：认证流程、支付流程、Worker 流程、管理后台流程、Kafka 消费失败重试进入 DLQ。
 - 测试目录已存在于 `internal/service`、`internal/middlerware`、`internal/pkg`、`internal/handler`、`internal/integration`。
 
 ### 前端已落地
@@ -14,9 +14,15 @@
 ## 运行方式
 - 后端单元测试：`make test` 或 `go test ./...`
 - 后端集成测试：`make test-integration`
+- Kafka/DLQ 定向回归：`GOCACHE="/tmp/go-build" go test -tags=integration ./internal/infra/kafka -run TestBatchConsumerHandler_ConsumeToDLQWithRealKafka -count=1`
 - 前端单测：`make test-frontend` 或 `cd frontend && pnpm test:unit`
 - 前端 E2E：`make test-e2e` 或 `cd frontend && pnpm test:e2e`
 - 全量：`make test-all`
+
+### Kafka/DLQ 集成测试依赖
+- 默认依赖开发基线的 Kafka / Redis：`127.0.0.1:19092`、`127.0.0.1:16379`，建议先执行 `make dev-up`。
+- 可通过环境变量覆盖连接：`SNEAKERFLASH_KAFKA_IT_BROKERS`、`SNEAKERFLASH_REDIS_IT_ADDR`、`SNEAKERFLASH_REDIS_IT_PASSWORD`。
+- 该测试会动态创建临时 topic，验证 `消费 -> 重试计数累积 -> 达到阈值 -> 投递 DLQ -> 清理重试计数` 主链路。
 
 ## 当前覆盖重点
 ### 后端
@@ -26,6 +32,7 @@
 - 订单查询、轮询、支付回调、优惠券应用
 - 优惠券模板与用户券核心逻辑
 - 健康检查与管理后台关键接口
+- Kafka 消费失败重试、DLQ 投递、重试计数清理
 
 ### 前端
 - API 封装的 token 刷新与异常处理
