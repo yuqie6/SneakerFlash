@@ -32,20 +32,28 @@ const fetchGraylist = async () => {
 const addBlack = async () => {
   if (!blackForm.value.trim()) return
   try { await api.post("/admin/risk/blacklist", { type: blackForm.type, value: blackForm.value.trim() }); blackForm.value = ""; toast.success("已添加"); fetchBlacklist() }
-  catch {}
+  catch {
+    return
+  }
 }
 const removeBlack = async (type: string, value: string) => {
   try { await api.delete("/admin/risk/blacklist", { data: { type, value } }); toast.success("已移除"); fetchBlacklist() }
-  catch {}
+  catch {
+    return
+  }
 }
 const addGray = async () => {
   if (!grayForm.value.trim()) return
   try { await api.post("/admin/risk/graylist", { type: grayForm.type, value: grayForm.value.trim() }); grayForm.value = ""; toast.success("已添加"); fetchGraylist() }
-  catch {}
+  catch {
+    return
+  }
 }
 const removeGray = async (type: string, value: string) => {
   try { await api.delete("/admin/risk/graylist", { data: { type, value } }); toast.success("已移除"); fetchGraylist() }
-  catch {}
+  catch {
+    return
+  }
 }
 
 onMounted(() => { fetchBlacklist(); fetchGraylist() })

@@ -105,7 +105,7 @@ func (h *OrderHandler) ListOrders(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "订单ID"
-// @Success 200 {object} app.Response{data=PollOrderResponse}
+// @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
 // @Failure 400 {object} app.Response "参数错误"
 // @Failure 401 {object} app.Response "未登录"
 // @Failure 404 {object} app.Response "未找到"
@@ -150,7 +150,7 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param order_num path string true "订单号"
-// @Success 200 {object} app.Response{data=OrderWithPaymentResponse}
+// @Success 200 {object} app.Response{data=PollOrderResponse}
 // @Failure 400 {object} app.Response "参数错误"
 // @Failure 401 {object} app.Response "未登录"
 // @Router /orders/poll/{order_num} [get]

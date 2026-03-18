@@ -55,7 +55,11 @@ describe("api client", () => {
       data: { id: 1, username: "alice" },
     })
     axiosMock.onPost("/api/v1/refresh").reply(200, {
-      access_token: "new-access-token",
+      code: 200,
+      msg: "ok",
+      data: {
+        access_token: "new-access-token",
+      },
     })
 
     await expect(api.get("/profile")).resolves.toEqual({ id: 1, username: "alice" })
@@ -75,7 +79,11 @@ describe("api client", () => {
       data: { list: [] },
     })
     axiosMock.onPost("/api/v1/refresh").reply(200, {
-      access_token: "refreshed-token",
+      code: 200,
+      msg: "ok",
+      data: {
+        access_token: "refreshed-token",
+      },
     })
 
     const first = api.get("/orders")
@@ -94,6 +102,26 @@ describe("api client", () => {
     axiosMock.onPost("/api/v1/refresh").reply(401, { msg: "refresh expired" })
 
     await expect(api.get("/orders")).rejects.toBeTruthy()
+    expect(localStorage.getItem("access_token")).toBeNull()
+    expect(localStorage.getItem("refresh_token")).toBeNull()
+  })
+
+  it("stops retrying when refreshed request is still 401", async () => {
+    localStorage.setItem("access_token", "expired-token")
+    localStorage.setItem("refresh_token", "refresh-token")
+
+    apiMock.onGet("/profile").replyOnce(401, { msg: "expired" })
+    apiMock.onGet("/profile").replyOnce(401, { msg: "still expired" })
+    axiosMock.onPost("/api/v1/refresh").reply(200, {
+      code: 200,
+      msg: "ok",
+      data: {
+        access_token: "new-access-token",
+      },
+    })
+
+    await expect(api.get("/profile")).rejects.toBeTruthy()
+    expect(axiosMock.history.post).toHaveLength(1)
     expect(localStorage.getItem("access_token")).toBeNull()
     expect(localStorage.getItem("refresh_token")).toBeNull()
   })

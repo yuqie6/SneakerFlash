@@ -56,6 +56,13 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 	ctx := logger.ContextWithValues(context.Background(), "batch_size", len(msgBodies))
 	startTime := time.Now()
 
+	type rollbackItem struct {
+		orderNum   string
+		productID  uint
+		userID     uint
+		failReason string
+	}
+
 	type msgItem struct {
 		idx  int
 		body []byte
@@ -83,6 +90,8 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 		}
 		return all, nil
 	}
+
+	partialRollbacks := make([]rollbackItem, 0)
 
 	// 2. 开启数据库事务
 	txErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -150,6 +159,12 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 				filtered := make([]*msgItem, 0, len(newItems))
 				for _, it := range newItems {
 					if it.msg.ProductID == productID {
+						partialRollbacks = append(partialRollbacks, rollbackItem{
+							orderNum:   it.msg.OrderNum,
+							productID:  it.msg.ProductID,
+							userID:     it.msg.UserID,
+							failReason: "库存不足",
+						})
 						resultsByIdx[it.idx] = orderResult{orderNum: it.msg.OrderNum, success: false, errMsg: "库存不足"}
 						continue
 					}
@@ -235,6 +250,11 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 			all[i] = i
 		}
 		return all, txErr
+	}
+
+	for _, item := range partialRollbacks {
+		rollbackRedisStock(ctx, item.productID, item.userID)
+		markPendingOrderFailed(ctx, item.orderNum, item.failReason)
 	}
 
 	// 4. 批量更新 Redis pending 状态（跳过没有 orderNum 的结果）

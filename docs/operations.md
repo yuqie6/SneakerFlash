@@ -37,6 +37,8 @@ make dev-init
 make dev-up
 ```
 
+- 首次启动后，建议先确认 `kafka-init` 已成功执行、`seckill_orders` 与 `seckill-order-dlq` 已创建，再启动 Worker。
+
 应用侧建议统一使用同一份配置文件：
 ```bash
 make dev-api
@@ -67,6 +69,8 @@ make prod-init
 make prod-init
 make prod-up
 ```
+
+- 若 Prometheus 需要从容器侧抓取宿主机 API 指标，请确保 API 监听地址对 `host.docker.internal` 可达，不要仅绑定 `127.0.0.1`。
 
 应用侧建议显式绑定单机生产配置：
 ```bash

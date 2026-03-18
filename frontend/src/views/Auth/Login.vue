@@ -15,9 +15,13 @@ const route = useRoute()
 const userStore = useUserStore()
 
 const onSubmit = async () => {
-  await userStore.login(form)
-  const redirect = (route.query.redirect as string) || "/"
-  router.push(redirect)
+  try {
+    await userStore.login(form)
+    const redirect = (route.query.redirect as string) || "/"
+    router.push(redirect)
+  } catch {
+    // 登录态校验失败时保留在当前页，由 store 统一提示。
+  }
 }
 </script>
 

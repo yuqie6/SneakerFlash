@@ -118,3 +118,9 @@ type OrderWithPaymentResponse struct {
 	Payment *PaymentResponse  `json:"payment,omitempty"`
 	Coupon  *service.MyCoupon `json:"coupon,omitempty"`
 }
+
+// RiskListResponse 风控名单响应。
+type RiskListResponse struct {
+	IP   []string `json:"ip"`
+	User []string `json:"user"`
+}

@@ -29,6 +29,7 @@ const { status, resultMsg, executeSeckill } = useSeckill()
 const pollingTimer = ref<number>()
 const orderPollTimer = ref<number>()
 const seckillResult = ref<SeckillResult | null>(null)
+const orderPollErrorCount = ref(0)
 
 const load = async () => {
   const id = Number(route.params.id)
@@ -82,6 +83,7 @@ const pollOrderStatus = async (orderNum: string) => {
   try {
     const res = await api.get<OrderPollResponse, OrderPollResponse>(`/orders/poll/${orderNum}`)
     if (res.status === "ready" && res.order?.order?.id) {
+      orderPollErrorCount.value = 0
       seckillResult.value = {
         order_num: res.order.order.order_num,
         order_id: res.order.order.id,
@@ -91,21 +93,29 @@ const pollOrderStatus = async (orderNum: string) => {
       router.push({ name: "order-detail", params: { id: res.order.order.id } })
       if (orderPollTimer.value) clearInterval(orderPollTimer.value)
     } else if (res.status === "failed") {
+      orderPollErrorCount.value = 0
       toast.error(res.message || "订单生成失败")
       if (orderPollTimer.value) clearInterval(orderPollTimer.value)
     }
-  } catch (err: any) {
-    console.error(err)
+  } catch (err: unknown) {
+    orderPollErrorCount.value += 1
+    if (orderPollErrorCount.value >= 3) {
+      if (orderPollTimer.value) clearInterval(orderPollTimer.value)
+      const message = err instanceof Error ? err.message : "订单轮询失败，请稍后到订单页查看"
+      toast.error(message)
+    }
   }
 }
 
 const startOrderPolling = (orderNum: string) => {
+  orderPollErrorCount.value = 0
   pollOrderStatus(orderNum)
   if (orderPollTimer.value) clearInterval(orderPollTimer.value)
   orderPollTimer.value = window.setInterval(() => pollOrderStatus(orderNum), 1500)
 }
 
 const isLoading = computed(() => status.value === "loading")
+const isSoldOut = computed(() => (product.value?.stock || 0) <= 0)
 const progressValue = computed(() => Math.max(0, Math.min(100, product.value?.stock || 0)))
 const buttonClass = computed(() => ({
   "animate-shake": status.value === "failed",
@@ -231,11 +241,12 @@ const formatDateTime = (dateStr?: string) => {
                   <MagmaButton
                     class="w-full justify-center"
                     :loading="status === 'loading'"
-                    :disabled="!isStarted || status === 'success' || isEnded"
+                    :disabled="!isStarted || status === 'success' || isEnded || isSoldOut"
                     :class="buttonClass"
                     @click="onSeckill"
                   >
                     <span v-if="isEnded">活动已结束</span>
+                    <span v-else-if="isSoldOut">已售罄</span>
                     <span v-else-if="buttonState === 'pending'">即将开始 · {{ formatted }}</span>
                     <span v-else-if="buttonState === 'loading'">锁定中...</span>
                     <span v-else-if="buttonState === 'success'">GOT 'EM · {{ resultMsg }}</span>

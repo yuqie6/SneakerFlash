@@ -42,7 +42,12 @@ export const useUserStore = defineStore("user", {
 
         if (res.access_token) {
           this.setTokens(res.access_token, res.refresh_token)
-          await this.fetchProfile()
+          const profile = await this.fetchProfile()
+          if (!profile) {
+            const err = new Error("登录状态校验失败，请重试")
+            toast.error(err.message)
+            throw err
+          }
           toast.success("登录成功")
         }
         return res
@@ -60,13 +65,15 @@ export const useUserStore = defineStore("user", {
       }
     },
     async fetchProfile() {
-      if (!this.accessToken) return
+      if (!this.accessToken) return null
       try {
         const res = await api.get<User, User>("/profile")
         this.profile = res
+        return res
       } catch {
         this.setTokens("")
         this.profile = null
+        return null
       }
     },
     async refreshTokenIfNeeded() {

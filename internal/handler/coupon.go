@@ -26,7 +26,7 @@ func NewCouponHandler(svc *service.CouponService) *CouponHandler {
 // @Param status query string false "available/used/expired"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
-// @Success 200 {object} app.Response{data=[]service.MyCoupon}
+// @Success 200 {object} app.Response{data=app.PageData}
 // @Router /coupons/mine [get]
 func (h *CouponHandler) ListMyCoupons(c *gin.Context) {
 	appG := app.Gin{C: c}

@@ -17,7 +17,7 @@
 - Kafka/DLQ 定向回归：`GOCACHE="/tmp/go-build" go test -tags=integration ./internal/infra/kafka -run TestBatchConsumerHandler_ConsumeToDLQWithRealKafka -count=1`
 - 前端单测：`make test-frontend` 或 `cd frontend && pnpm test:unit`
 - 前端 E2E：`make test-e2e` 或 `cd frontend && pnpm test:e2e`
-- 全量：`make test-all`
+- 当前 `make test-all` 覆盖后端单测、集成测试与前端单测；前端 E2E 需单独执行 `make test-e2e`
 
 ### Kafka/DLQ 集成测试依赖
 - 默认依赖开发基线的 Kafka / Redis：`127.0.0.1:19092`、`127.0.0.1:16379`，建议先执行 `make dev-up`。

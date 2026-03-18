@@ -52,13 +52,17 @@ const submitForm = async () => {
     }
     resetForm()
     fetchCoupons()
-  } catch {}
+  } catch {
+    return
+  }
   finally { saving.value = false }
 }
 
 const deleteCoupon = async (id: number) => {
   try { await api.delete(`/admin/coupons/${id}`); toast.success("已删除"); fetchCoupons() }
-  catch {}
+  catch {
+    return
+  }
 }
 
 const typeText = (t: string) => t === "full_cut" ? "满减" : "折扣"

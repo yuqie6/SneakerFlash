@@ -54,7 +54,7 @@ server:
 - Worker 消费失败并未完成补偿
 
 ### 排查动作
-1. 确认 `go run ./cmd/worker` 正常运行
+1. 确认 `make dev-worker` 或 `SNEAKERFLASH_CONFIG=./config.dev.local.yml go run ./cmd/worker` 正常运行
 2. 打开 Kafka UI 检查 topic 是否有堆积
 3. 查看 Worker 日志是否存在事务失败
 4. 查看 `outbox_messages` 状态与重试次数

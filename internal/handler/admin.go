@@ -4,6 +4,7 @@ import (
 	"SneakerFlash/internal/model"
 	"SneakerFlash/internal/pkg/app"
 	"SneakerFlash/internal/pkg/e"
+	"SneakerFlash/internal/repository"
 	"SneakerFlash/internal/service"
 	"context"
 	"errors"
@@ -20,6 +21,7 @@ type AdminHandler struct {
 	adminSvc  *service.AdminService
 	riskSvc   *service.RiskService
 	couponSvc *service.CouponService
+	auditSvc  *service.AuditService
 }
 
 type riskEntryReq struct {
@@ -55,14 +57,24 @@ type adminCouponUpdateReq struct {
 	Status        *string `json:"status"`
 }
 
-func NewAdminHandler(adminSvc *service.AdminService, riskSvc *service.RiskService, couponSvc *service.CouponService) *AdminHandler {
+func NewAdminHandler(adminSvc *service.AdminService, riskSvc *service.RiskService, couponSvc *service.CouponService, auditSvc *service.AuditService) *AdminHandler {
 	return &AdminHandler{
 		adminSvc:  adminSvc,
 		riskSvc:   riskSvc,
 		couponSvc: couponSvc,
+		auditSvc:  auditSvc,
 	}
 }
 
+// Stats 管理台总览统计
+// @Summary 管理台统计
+// @Tags 管理后台
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} app.Response{data=service.AdminStats}
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/stats [get]
 func (h *AdminHandler) Stats(c *gin.Context) {
 	appG := app.Gin{C: c}
 	stats, err := h.adminSvc.Stats(c.Request.Context())
@@ -73,6 +85,18 @@ func (h *AdminHandler) Stats(c *gin.Context) {
 	appG.Success(stats)
 }
 
+// ListUsers 管理台用户列表
+// @Summary 管理台用户列表
+// @Tags 管理后台
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} app.Response{data=app.PageData}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/users [get]
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	appG := app.Gin{C: c}
 	page, pageSize, ok := parsePage(c)
@@ -89,6 +113,19 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	appG.SuccessWithPage(users, total, page, pageSize)
 }
 
+// ListOrders 管理台订单列表
+// @Summary 管理台订单列表
+// @Tags 管理后台
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Param status query int false "订单状态：0未支付 1已支付 2失败"
+// @Success 200 {object} app.Response{data=app.PageData}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/orders [get]
 func (h *AdminHandler) ListOrders(c *gin.Context) {
 	appG := app.Gin{C: c}
 	page, pageSize, ok := parsePage(c)
@@ -105,6 +142,10 @@ func (h *AdminHandler) ListOrders(c *gin.Context) {
 			return
 		}
 		orderStatus := model.OrderStatus(parsed)
+		if !model.ValidOrderStatus(orderStatus) {
+			appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+			return
+		}
 		status = &orderStatus
 	}
 
@@ -116,6 +157,18 @@ func (h *AdminHandler) ListOrders(c *gin.Context) {
 	appG.SuccessWithPage(orders, total, page, pageSize)
 }
 
+// ListCoupons 管理台优惠券模板列表
+// @Summary 管理台优惠券列表
+// @Tags 管理后台
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} app.Response{data=app.PageData}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/coupons [get]
 func (h *AdminHandler) ListCoupons(c *gin.Context) {
 	appG := app.Gin{C: c}
 	page, pageSize, ok := parsePage(c)
@@ -132,6 +185,18 @@ func (h *AdminHandler) ListCoupons(c *gin.Context) {
 	appG.SuccessWithPage(coupons, total, page, pageSize)
 }
 
+// CreateCoupon 管理台创建优惠券模板
+// @Summary 创建优惠券模板
+// @Tags 管理后台
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body adminCouponCreateReq true "优惠券模板"
+// @Success 200 {object} app.Response{data=model.Coupon}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/coupons [post]
 func (h *AdminHandler) CreateCoupon(c *gin.Context) {
 	appG := app.Gin{C: c}
 
@@ -173,9 +238,24 @@ func (h *AdminHandler) CreateCoupon(c *gin.Context) {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
+	h.recordAudit(c, model.AdminResourceCoupons, "create", strconv.Itoa(int(coupon.ID)), req, "")
 	appG.Success(coupon)
 }
 
+// UpdateCoupon 管理台更新优惠券模板
+// @Summary 更新优惠券模板
+// @Tags 管理后台
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "优惠券ID"
+// @Param payload body adminCouponUpdateReq true "优惠券模板补丁"
+// @Success 200 {object} app.Response{data=model.Coupon}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Failure 404 {object} app.Response "资源不存在"
+// @Router /admin/coupons/{id} [put]
 func (h *AdminHandler) UpdateCoupon(c *gin.Context) {
 	appG := app.Gin{C: c}
 	id, err := strconv.Atoi(c.Param("id"))
@@ -234,9 +314,22 @@ func (h *AdminHandler) UpdateCoupon(c *gin.Context) {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
+	h.recordAudit(c, model.AdminResourceCoupons, "update", strconv.Itoa(int(coupon.ID)), req, "")
 	appG.Success(coupon)
 }
 
+// DeleteCoupon 管理台删除优惠券模板
+// @Summary 删除优惠券模板
+// @Tags 管理后台
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "优惠券ID"
+// @Success 200 {object} app.Response{data=MessageResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Failure 404 {object} app.Response "资源不存在"
+// @Router /admin/coupons/{id} [delete]
 func (h *AdminHandler) DeleteCoupon(c *gin.Context) {
 	appG := app.Gin{C: c}
 	id, err := strconv.Atoi(c.Param("id"))
@@ -257,9 +350,22 @@ func (h *AdminHandler) DeleteCoupon(c *gin.Context) {
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
+	h.recordAudit(c, model.AdminResourceCoupons, "delete", strconv.Itoa(id), nil, "")
 	appG.Success(gin.H{"message": "ok"})
 }
 
+// ListProducts 管理台商品列表
+// @Summary 管理台商品列表
+// @Tags 管理后台
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} app.Response{data=app.PageData}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/products [get]
 func (h *AdminHandler) ListProducts(c *gin.Context) {
 	appG := app.Gin{C: c}
 	page, pageSize, ok := parsePage(c)
@@ -276,28 +382,94 @@ func (h *AdminHandler) ListProducts(c *gin.Context) {
 	appG.SuccessWithPage(products, total, page, pageSize)
 }
 
+// ListBlacklist 管理台黑名单
+// @Summary 查询黑名单
+// @Tags 管理后台
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} app.Response{data=RiskListResponse}
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/risk/blacklist [get]
 func (h *AdminHandler) ListBlacklist(c *gin.Context) {
 	h.listRisk(c, h.riskSvc.ListBlacklist)
 }
 
+// AddBlacklist 管理台新增黑名单
+// @Summary 新增黑名单
+// @Tags 管理后台
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body riskEntryReq true "名单项"
+// @Success 200 {object} app.Response{data=MessageResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/risk/blacklist [post]
 func (h *AdminHandler) AddBlacklist(c *gin.Context) {
-	h.changeRisk(c, h.riskSvc.AddBlacklist)
+	h.changeRisk(c, "create", model.AdminResourceRisk, h.riskSvc.AddBlacklist)
 }
 
+// RemoveBlacklist 管理台删除黑名单
+// @Summary 删除黑名单
+// @Tags 管理后台
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body riskEntryReq true "名单项"
+// @Success 200 {object} app.Response{data=MessageResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/risk/blacklist [delete]
 func (h *AdminHandler) RemoveBlacklist(c *gin.Context) {
-	h.changeRisk(c, h.riskSvc.RemoveBlacklist)
+	h.changeRisk(c, "delete", model.AdminResourceRisk, h.riskSvc.RemoveBlacklist)
 }
 
+// ListGraylist 管理台灰名单
+// @Summary 查询灰名单
+// @Tags 管理后台
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} app.Response{data=RiskListResponse}
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/risk/graylist [get]
 func (h *AdminHandler) ListGraylist(c *gin.Context) {
 	h.listRisk(c, h.riskSvc.ListGraylist)
 }
 
+// AddGraylist 管理台新增灰名单
+// @Summary 新增灰名单
+// @Tags 管理后台
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body riskEntryReq true "名单项"
+// @Success 200 {object} app.Response{data=MessageResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/risk/graylist [post]
 func (h *AdminHandler) AddGraylist(c *gin.Context) {
-	h.changeRisk(c, h.riskSvc.AddGraylist)
+	h.changeRisk(c, "create", model.AdminResourceRisk, h.riskSvc.AddGraylist)
 }
 
+// RemoveGraylist 管理台删除灰名单
+// @Summary 删除灰名单
+// @Tags 管理后台
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body riskEntryReq true "名单项"
+// @Success 200 {object} app.Response{data=MessageResponse}
+// @Failure 400 {object} app.Response "参数错误"
+// @Failure 401 {object} app.Response "未登录"
+// @Failure 403 {object} app.Response "需要管理员权限"
+// @Router /admin/risk/graylist [delete]
 func (h *AdminHandler) RemoveGraylist(c *gin.Context) {
-	h.changeRisk(c, h.riskSvc.RemoveGraylist)
+	h.changeRisk(c, "delete", model.AdminResourceRisk, h.riskSvc.RemoveGraylist)
 }
 
 func (h *AdminHandler) listRisk(c *gin.Context, fn func(context.Context) (ips, users []string, err error)) {
@@ -314,7 +486,7 @@ func (h *AdminHandler) listRisk(c *gin.Context, fn func(context.Context) (ips, u
 	appG.Success(gin.H{"ip": ips, "user": users})
 }
 
-func (h *AdminHandler) changeRisk(c *gin.Context, fn func(context.Context, string, string) error) {
+func (h *AdminHandler) changeRisk(c *gin.Context, action, resource string, fn func(context.Context, string, string) error) {
 	appG := app.Gin{C: c}
 
 	var req riskEntryReq
@@ -335,7 +507,56 @@ func (h *AdminHandler) changeRisk(c *gin.Context, fn func(context.Context, strin
 		appG.Error(http.StatusInternalServerError, e.ERROR)
 		return
 	}
+	h.recordAudit(c, resource, action, req.Value, req, "")
 	appG.Success(gin.H{"message": "ok"})
+}
+
+func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
+	appG := app.Gin{C: c}
+	page, pageSize, ok := parsePage(c)
+	if !ok {
+		appG.Error(http.StatusBadRequest, e.INVALID_PARAMS)
+		return
+	}
+
+	logs, total, err := h.auditSvc.List(c.Request.Context(), repository.AuditLogFilter{
+		ActorName: strings.TrimSpace(c.Query("actor_name")),
+		Resource:  strings.TrimSpace(c.Query("resource")),
+		Action:    strings.TrimSpace(c.Query("action")),
+		Page:      page,
+		PageSize:  pageSize,
+	})
+	if err != nil {
+		appG.Error(http.StatusInternalServerError, e.ERROR)
+		return
+	}
+	appG.SuccessWithPage(logs, total, page, pageSize)
+}
+
+func (h *AdminHandler) recordAudit(c *gin.Context, resource, action, resourceID string, body any, errMsg string) {
+	if h.auditSvc == nil {
+		return
+	}
+	userID, _ := c.Get("userID")
+	username, _ := c.Get("username")
+	role, _ := c.Get("role")
+	result := "success"
+	if errMsg != "" {
+		result = "failed"
+	}
+	_ = h.auditSvc.Record(c.Request.Context(), service.AuditLogInput{
+		ActorID:      userID.(uint),
+		ActorName:    username.(string),
+		ActorRole:    role.(string),
+		Resource:     resource,
+		Action:       action,
+		ResourceID:   resourceID,
+		RequestPath:  c.FullPath(),
+		RequestIP:    c.ClientIP(),
+		RequestBody:  body,
+		Result:       result,
+		ErrorMessage: errMsg,
+	})
 }
 
 func parsePage(c *gin.Context) (int, int, bool) {

@@ -55,7 +55,7 @@ src/
 - 统一通过 `frontend/src/lib/api.ts` 发起请求
 - 默认 Base URL：`VITE_API_BASE_URL || /api/v1`
 - 后端响应 `code != 200` 时统一抛错
-- `401` 时自动用 `refresh_token` 刷新 access token，失败后清理登录态并跳转登录页
+- `401` 时自动用 `refresh_token` 刷新 access token，按后端 `{ code, msg, data }` 契约解包；失败后清理登录态并跳转登录页
 
 ### Token 存储
 - `localStorage.access_token`

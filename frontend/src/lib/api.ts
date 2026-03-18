@@ -1,4 +1,4 @@
-import axios from "axios"
+import axios, { AxiosHeaders, type InternalAxiosRequestConfig } from "axios"
 import { toast } from "vue-sonner"
 
 const api = axios.create({
@@ -9,6 +9,10 @@ const api = axios.create({
 let isRefreshing = false
 let refreshQueue: Array<(token: string | null) => void> = []
 
+type RetryableRequestConfig = InternalAxiosRequestConfig & {
+  _retry?: boolean
+}
+
 const getAccessToken = () => localStorage.getItem("access_token")
 const getRefreshToken = () => localStorage.getItem("refresh_token")
 const setAccessToken = (token: string) => localStorage.setItem("access_token", token)
@@ -16,14 +20,38 @@ const clearTokens = () => {
   localStorage.removeItem("access_token")
   localStorage.removeItem("refresh_token")
 }
+
+const ensureHeaders = (config: InternalAxiosRequestConfig) => {
+  if (!config.headers) {
+    config.headers = new AxiosHeaders()
+  }
+  return config.headers
+}
+
+const setAuthorizationHeader = (config: InternalAxiosRequestConfig, token: string) => {
+  ensureHeaders(config).set("Authorization", `Bearer ${token}`)
+}
+
+const unwrapPayload = <T>(payload: unknown): T => {
+  if (payload && typeof payload === "object" && "code" in payload) {
+    const apiPayload = payload as { code: number; msg?: string; data?: T }
+    if (apiPayload.code !== 200) {
+      throw new Error(apiPayload.msg || "操作失败")
+    }
+    return apiPayload.data as T
+  }
+  return payload as T
+}
+
 export const redirectToLogin = () => {
   if (import.meta.env.MODE === "test") return
-  window.location.href = "/login"
+  const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.location.href = `/login?redirect=${encodeURIComponent(redirect || "/")}`
 }
 
 api.interceptors.request.use((config) => {
   const token = getAccessToken()
-  if (token) config.headers.Authorization = `Bearer ${token}`
+  if (token) setAuthorizationHeader(config, token)
   return config
 })
 
@@ -40,11 +68,12 @@ api.interceptors.response.use(
   },
   async (error) => {
     const { response, config } = error
-    const originalRequest = config
+    const originalRequest = config as RetryableRequestConfig | undefined
 
     if (response?.status === 401) {
       const refreshToken = getRefreshToken()
-      if (!refreshToken) {
+      const isRefreshRequest = originalRequest?.url?.endsWith("/refresh")
+      if (!refreshToken || !originalRequest || originalRequest._retry || isRefreshRequest) {
         clearTokens()
         redirectToLogin()
         return Promise.reject(error)
@@ -57,27 +86,29 @@ api.interceptors.response.use(
               reject(error)
               return
             }
-            originalRequest.headers.Authorization = `Bearer ${token}`
+            setAuthorizationHeader(originalRequest, token)
             resolve(api(originalRequest))
           })
         })
       }
 
       isRefreshing = true
+      originalRequest._retry = true
       try {
         const res = await axios.post(
           `${api.defaults.baseURL}/refresh`,
           { refresh_token: refreshToken },
           { timeout: 8000 }
         )
-        const newToken = res.data?.access_token
+        const refreshData = unwrapPayload<{ access_token?: string }>(res.data)
+        const newToken = refreshData?.access_token
         if (!newToken) {
           throw new Error("刷新失败")
         }
         setAccessToken(newToken)
         refreshQueue.forEach((cb) => cb(newToken))
         refreshQueue = []
-        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        setAuthorizationHeader(originalRequest, newToken)
         return api(originalRequest)
       } catch (refreshErr) {
         clearTokens()

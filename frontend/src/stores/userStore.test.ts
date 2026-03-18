@@ -48,6 +48,24 @@ describe("userStore", () => {
     expect(localStorage.getItem("access_token")).toBe("access-token")
   })
 
+  it("fails login when profile validation fails", async () => {
+    apiMock.post.mockResolvedValueOnce({
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+      expires_in: 3600,
+    })
+    apiMock.get.mockRejectedValueOnce(new Error("unauthorized"))
+
+    const store = useUserStore()
+
+    await expect(store.login({ user_name: "alice", user_password: "password-123" })).rejects.toThrow(
+      "登录状态校验失败，请重试"
+    )
+    expect(store.accessToken).toBe("")
+    expect(store.refreshToken).toBe("")
+    expect(store.profile).toBeNull()
+  })
+
   it("clears auth state when fetchProfile fails", async () => {
     const store = useUserStore()
     store.setTokens("access-token", "refresh-token")

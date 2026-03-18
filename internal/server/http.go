@@ -57,11 +57,7 @@ func NewHttpServer() *gin.Engine {
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
-		AllowOriginFunc: func(origin string) bool {
-			// 预留按需放通其他前端域名
-			return true
-		},
-		AllowWebSockets: true,
+		AllowWebSockets:  true,
 	}))
 	uploadDir := config.Conf.Server.UploadDir
 	if uploadDir == "" {

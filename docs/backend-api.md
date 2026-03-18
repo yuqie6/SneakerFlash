@@ -52,7 +52,8 @@
 - `POST /seckill`（鉴权）
   Body：`{ "product_id": number }`
   成功：`data={ "order_num": string, "payment_id": string, "status": "pending"|"ready" }`。
-  常见业务码：`30001` 售罄、`30002` 重复下单、`30003` 未开始、`30004` 已结束、`30005` 系统繁忙。
+  常见业务码：`30001` 售罄、`30002` 重复下单、`30003` 请求过于频繁。
+  未开始/已结束当前返回 `400 + code=400`；系统繁忙当前返回 `503 + code=500`。
 
 ## 订单与支付
 - `GET /orders?page=1&page_size=10&status=0|1|2`（鉴权）
@@ -71,6 +72,7 @@
 - `POST /payment/callback`
   Body：`{ "payment_id": string, "status": "paid"|"failed"|"refunded", "notify_data"?: string }`
   成功：`data={ order, payment, coupon? }`；支付单不存在返回 `404`。
+  `notify_data` 支持持久化完整回调负载，不再受 20 字符限制。
 
 ## VIP 与优惠券
 - `GET /vip/profile`（鉴权）
