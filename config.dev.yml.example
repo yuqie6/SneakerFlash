@@ -1,0 +1,65 @@
+server:
+  port: "0.0.0.0:8000"
+  machineid: 1
+  upload_dir: "uploads"
+
+data:
+  database:
+    host: "127.0.0.1"
+    port: 13306
+    user: "sneaker"
+    password: "sneaker_dev"
+    dbname: "sneaker_flash"
+    log_lever: 2
+    max_idle: 10
+    max_open: 100
+    max_idle_time: 300
+    max_lifetime: 3600
+    slow_threshold_ms: 500
+  redis:
+    addr: "127.0.0.1:16379"
+    password: "123456"
+    db: 0
+    pool_size: 100
+    min_idle: 20
+    conn_timeout: 5
+  kafka:
+    brokers:
+      - "127.0.0.1:19092"
+    topic: "seckill_orders"
+    consumer_group: "sneaker-group-dev"
+    initial_offset: "oldest"
+    batch_size: 100
+    flush_interval: 200
+    max_retries: 3
+    dlq_topic: "seckill-order-dlq"
+    outbox_scan_interval: 30
+    outbox_timeout: 60
+
+jwt:
+  secret: "change-me-dev"
+  expried: 86400
+  refresh_expried: 604800
+
+risk:
+  enable: false
+  login_rate:
+    rate: 100
+    burst: 200
+  seckill_rate:
+    rate: 3000
+    burst: 5000
+  pay_rate:
+    rate: 200
+    burst: 300
+  product_rate:
+    rate: 4000
+    burst: 6000
+  hotspot_burst: 100
+
+log:
+  level: "debug"
+  path: "./log/app"
+  max_size: 100
+  max_backups: 30
+  max_age: 7

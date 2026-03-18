@@ -16,8 +16,8 @@
 
 ## 本地启动顺序
 ### 1. 准备配置
-- 默认配置文件：仓库根 `config.yml`
-- 或环境变量：`SNEAKERFLASH_CONFIG=/path/to/config.yml`
+- 推荐直接执行 `make dev-init`
+- 该命令会在本地生成 `.env.dev.local` 与 `config.dev.local.yml`
 - 关键字段：
   - `server.port`
   - `server.machineid`
@@ -28,16 +28,25 @@
 
 详见 `configuration.md`
 
+### 配置读取方式
+- `go run ./cmd/api` 与 `go run ./cmd/worker` 都会读取同一套应用配置
+- `make dev-api` 与 `make dev-worker` 会显式设置 `SNEAKERFLASH_CONFIG=./config.dev.local.yml`
+- 未设置 `SNEAKERFLASH_CONFIG` 时，程序会直接失败
+- 环境变量会在文件读取后覆盖同名字段
+
 ### 2. 启动依赖
 ```bash
-docker compose up -d
+make dev-init
+make dev-up
 ```
 
 ### 3. 启动后端
 ```bash
-go run ./cmd/api
-go run ./cmd/worker
+make dev-api
+make dev-worker
 ```
+
+这两个命令都会自动读取 `config.dev.local.yml`，不需要再手动传 `SNEAKERFLASH_CONFIG`
 
 ### 4. 启动前端
 ```bash
@@ -47,6 +56,11 @@ pnpm dev
 ```
 
 ## 常用命令
+### 命令总览
+```bash
+make help
+```
+
 ### Go
 ```bash
 make lint-go
@@ -59,6 +73,7 @@ make build-worker
 ```bash
 make lint-frontend
 make frontend-build
+make dev-frontend
 ```
 
 ### Swagger
@@ -120,5 +135,6 @@ swag init -g ./cmd/api/main.go -o ./docs
 - Snowflake 初始化失败：缺少 `server.machineid`
 - Docker 拉镜像失败：Docker daemon 仍绑定旧代理
 - 秒杀永远 pending：Worker 未启动、Kafka 不通、Outbox 补偿未生效
+- Kafka topic 缺失：确认 `kafka-init` 一次性任务已执行成功，或手动执行 topic 创建命令
 
 更详细的排查手册见 `troubleshooting.md`

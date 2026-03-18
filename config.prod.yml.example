@@ -1,0 +1,65 @@
+server:
+  port: "127.0.0.1:8000"
+  machineid: 1
+  upload_dir: "/var/lib/sneakerflash/uploads"
+
+data:
+  database:
+    host: "127.0.0.1"
+    port: 3306
+    user: "sneaker"
+    password: "<replace-with-secret>"
+    dbname: "sneaker_flash"
+    log_lever: 1
+    max_idle: 20
+    max_open: 200
+    max_idle_time: 300
+    max_lifetime: 1800
+    slow_threshold_ms: 300
+  redis:
+    addr: "127.0.0.1:6379"
+    password: "<replace-with-secret>"
+    db: 0
+    pool_size: 200
+    min_idle: 50
+    conn_timeout: 3
+  kafka:
+    brokers:
+      - "127.0.0.1:9092"
+    topic: "seckill_orders"
+    consumer_group: "sneaker-group-prod"
+    initial_offset: "oldest"
+    batch_size: 200
+    flush_interval: 100
+    max_retries: 5
+    dlq_topic: "seckill-order-dlq"
+    outbox_scan_interval: 10
+    outbox_timeout: 30
+
+jwt:
+  secret: "<replace-with-secret>"
+  expried: 3600
+  refresh_expried: 86400
+
+risk:
+  enable: true
+  login_rate:
+    rate: 50
+    burst: 100
+  seckill_rate:
+    rate: 1500
+    burst: 3000
+  pay_rate:
+    rate: 100
+    burst: 200
+  product_rate:
+    rate: 1000
+    burst: 1000
+  hotspot_burst: 100
+
+log:
+  level: "info"
+  path: "/var/log/sneakerflash/app.log"
+  max_size: 100
+  max_backups: 10
+  max_age: 30

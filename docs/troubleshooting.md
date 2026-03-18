@@ -28,7 +28,7 @@ proxyconnect tcp: dial tcp 127.0.0.1:10808: connect: connection refused
 - `server.machineid` 缺失或非法
 
 ### 处理动作
-- 在 `config.yml` 中补充：
+- 在当前使用的应用配置文件（推荐 `config.dev.local.yml` / `config.prod.local.yml`）中补充：
 ```yaml
 server:
   machineid: 1
@@ -110,4 +110,3 @@ server:
 2. 更新 `docs/backend-api.md`
 3. 重新生成 Swagger
 4. 在 `governance.md` 记录本次同步
-

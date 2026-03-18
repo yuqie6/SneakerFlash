@@ -10,7 +10,7 @@
 | 架构 | `architecture.md` | 分层、时序、关键一致性设计 |
 | 开发 | `development.md` | 本地运行、lint、构建、协作流程 |
 | 测试 | `testing.md` | 单测、集成测试、端到端测试方案 |
-| 配置 | `configuration.md` | `config.yml` 字段与环境变量说明 |
+| 配置 | `configuration.md` | `config.<env>.local.yml` 与环境变量说明 |
 | 运维 | `operations.md` | 依赖拉起、监控、压测与运维动作 |
 | 排障 | `troubleshooting.md` | Docker、Kafka、Redis、轮询异常等问题定位 |
 | 接口 | `backend-api.md` | 人类可读接口文档 |

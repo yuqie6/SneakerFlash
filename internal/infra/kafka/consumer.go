@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,9 +19,9 @@ type BatchMessageHandler func(msgs [][]byte) (failedIndexes []int, err error)
 func StartBatchConsumer(cfg config.KafkaConfig, handler BatchMessageHandler) {
 	saramaCfg := sarama.NewConfig()
 	saramaCfg.Consumer.Return.Errors = true
-	saramaCfg.Consumer.Offsets.Initial = sarama.OffsetNewest
+	saramaCfg.Consumer.Offsets.Initial = resolveInitialOffset(cfg.InitialOffset)
 
-	groupID := "sneaker-group"
+	groupID := resolveConsumerGroup(cfg.ConsumerGroup)
 	group, err := sarama.NewConsumerGroup(cfg.Brokers, groupID, saramaCfg)
 	if err != nil {
 		log.Fatalf("[ERROR] 创建消费组失败: %v", err)
@@ -53,8 +54,8 @@ func StartBatchConsumer(cfg config.KafkaConfig, handler BatchMessageHandler) {
 		retryCount:    make(map[string]int),
 	}
 
-	log.Printf("[INFO] Worker 正在监听 kafka topic: %s (batch_size=%d, flush_interval=%dms, max_retries=%d, dlq_topic=%s)",
-		cfg.Topic, batchSize, flushInterval, maxRetries, cfg.DLQTopic)
+	log.Printf("[INFO] Worker 正在监听 kafka topic: %s (group_id=%s, initial_offset=%s, batch_size=%d, flush_interval=%dms, max_retries=%d, dlq_topic=%s)",
+		cfg.Topic, groupID, normalizeInitialOffset(cfg.InitialOffset), batchSize, flushInterval, maxRetries, cfg.DLQTopic)
 
 	for {
 		topics := []string{cfg.Topic}
@@ -63,6 +64,31 @@ func StartBatchConsumer(cfg config.KafkaConfig, handler BatchMessageHandler) {
 			log.Printf("[ERROR] 消费异常: %v", err)
 		}
 	}
+}
+
+func resolveConsumerGroup(group string) string {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return "sneaker-group"
+	}
+	return group
+}
+
+func resolveInitialOffset(offset string) int64 {
+	switch normalizeInitialOffset(offset) {
+	case "newest":
+		return sarama.OffsetNewest
+	default:
+		return sarama.OffsetOldest
+	}
+}
+
+func normalizeInitialOffset(offset string) string {
+	offset = strings.TrimSpace(strings.ToLower(offset))
+	if offset == "newest" {
+		return "newest"
+	}
+	return "oldest"
 }
 
 // msgWithSession 记录消息和对应的 session，用于批量确认

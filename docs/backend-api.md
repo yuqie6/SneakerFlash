@@ -75,5 +75,5 @@
 - `Payment`：`id`, `order_id`, `payment_id`, `amount_cents`, `status`（pending/paid/failed/refunded）, `notify_data?`, `created_at`, `updated_at`
 
 ## 风控与限流
-- 开关：`config.yml` 中 `risk.enable`；按接口（登录/支付/秒杀）和热点参数（product_id）限流，命中返回 `code=701/702`。  
+- 开关：应用配置文件中的 `risk.enable`；按接口（登录/支付/秒杀）和热点参数（product_id）限流，命中返回 `code=701/702`。  
 - 键粒度：默认按用户 ID / IP + 路径或参数建桶。修改频次可调整 `rate/burst/ttl` 配置。***

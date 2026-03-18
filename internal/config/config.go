@@ -60,6 +60,8 @@ type RedisConfig struct {
 type KafkaConfig struct {
 	Brokers            []string `mapstructure:"brokers"`
 	Topic              string   `mapstructure:"topic"`
+	ConsumerGroup      string   `mapstructure:"consumer_group"`
+	InitialOffset      string   `mapstructure:"initial_offset"`       // oldest/newest，默认 oldest
 	BatchSize          int      `mapstructure:"batch_size"`           // 批量消费数量，默认 100
 	FlushInterval      int      `mapstructure:"flush_interval"`       // 最大等待时间(ms)，默认 200
 	MaxRetries         int      `mapstructure:"max_retries"`          // 消费端最大重试次数，默认 3
@@ -95,13 +97,10 @@ var Conf Config
 
 func Init() {
 	configFile := os.Getenv("SNEAKERFLASH_CONFIG")
-	if configFile != "" {
-		viper.SetConfigFile(configFile)
-	} else {
-		viper.SetConfigName("config")
-		viper.SetConfigType("yml")
-		viper.AddConfigPath("./")
+	if configFile == "" {
+		log.Fatal("必须设置 SNEAKERFLASH_CONFIG 指向 config.<env>.local.yml")
 	}
+	viper.SetConfigFile(configFile)
 
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("SNEAKERFLASH")

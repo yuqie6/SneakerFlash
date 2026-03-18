@@ -3,8 +3,8 @@
 本方案使用 k6 复现高并发秒杀链路，自动完成注册、登录、商品创建和高频 `/seckill` 调用，便于评估 Redis/Lua、Kafka 投递和 HTTP 层表现。
 
 ## 前置条件
-- 本地依赖已按 `config.yml` 启动（MySQL/Redis/Kafka），建议关闭或放宽 `risk.enable` 相关限流，避免压测被中间件拦截。
-- API 服务已启动：`go run ./cmd/api`；异步处理可同时启动 worker：`go run ./cmd/worker`。
+- 本地依赖已按 `make dev-up` 启动（MySQL/Redis/Kafka），建议关闭或放宽 `risk.enable` 相关限流，避免压测被中间件拦截。
+- API 服务已启动：`make dev-api`；异步处理可同时启动 worker：`make dev-worker`。
 - 已安装 k6：`https://k6.io/docs/get-started/installation/`。
 
 ## 运行示例

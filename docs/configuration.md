@@ -1,40 +1,59 @@
 # 配置说明
 
 ## 配置来源
-- 默认文件：`config.yml`
+- 开发模板：`config.dev.yml.example`
+- 单机生产模板：`config.prod.yml.example`
+- 开发实际文件：`config.dev.local.yml`
+- 单机生产实际文件：`config.prod.local.yml`
 - 覆盖方式：环境变量 `SNEAKERFLASH_*`
-- 指定文件：`SNEAKERFLASH_CONFIG=/path/to/config.yml`
+- 指定文件：`SNEAKERFLASH_CONFIG=/path/to/config.local.yml`
+
+## 读取规则
+1. 必须设置 `SNEAKERFLASH_CONFIG`
+2. 程序读取该路径指向的 yml 文件
+3. 读取完成后，再应用 `SNEAKERFLASH_` 前缀的环境变量覆盖同名配置
+
+> 当前项目不再依赖默认 `config.yml`，统一通过 `make` 显式传入 `config.<env>.local.yml`。
+
+例如：
+- `SNEAKERFLASH_CONFIG=./config.dev.local.yml`
+- `SNEAKERFLASH_SERVER_PORT=0.0.0.0:8001`
+- `SNEAKERFLASH_DATA_KAFKA_TOPIC=seckill_orders`
+- `SNEAKERFLASH_DATA_KAFKA_CONSUMER_GROUP=sneaker-group-dev`
 
 ## 推荐结构
+### 开发环境
 ```yaml
 server:
-  port: ":8000"
+  port: "0.0.0.0:8000"
   machineid: 1
   upload_dir: "uploads"
 
 data:
   database:
     host: "127.0.0.1"
-    port: 3306
-    user: "root"
-    password: "root"
+    port: 13306
+    user: "sneaker"
+    password: "sneaker_dev"
     dbname: "sneaker_flash"
-    log_lever: 3
+    log_lever: 2
     max_idle: 10
     max_open: 100
-    max_lifetime: 300
+    max_lifetime: 3600
     max_idle_time: 300
-    slow_threshold_ms: 200
+    slow_threshold_ms: 500
   redis:
-    addr: "127.0.0.1:6379"
+    addr: "127.0.0.1:16379"
     password: "123456"
     db: 0
-    pool_size: 50
-    min_idle: 10
+    pool_size: 100
+    min_idle: 20
     conn_timeout: 5
   kafka:
-    brokers: ["127.0.0.1:9092"]
-    topic: "seckill-order"
+    brokers: ["127.0.0.1:19092"]
+    topic: "seckill_orders"
+    consumer_group: "sneaker-group-dev"
+    initial_offset: "oldest"
     batch_size: 100
     flush_interval: 200
     max_retries: 3
@@ -43,9 +62,9 @@ data:
     outbox_timeout: 60
 
 jwt:
-  secret: "change-me"
-  expried: 3600
-  refresh_expried: 86400
+  secret: "change-me-dev"
+  expried: 86400
+  refresh_expried: 604800
 
 risk:
   enable: false
@@ -56,10 +75,70 @@ risk:
   hotspot_burst: 100
 
 log:
-  level: "info"
-  path: "log/api.log"
+  level: "debug"
+  path: "./log/app"
   max_age: 7
-  max_backups: 3
+  max_backups: 30
+  max_size: 100
+```
+
+### 单机生产基线
+```yaml
+server:
+  port: "127.0.0.1:8000"
+  machineid: 1
+  upload_dir: "/var/lib/sneakerflash/uploads"
+
+data:
+  database:
+    host: "127.0.0.1"
+    port: 3306
+    user: "sneaker"
+    password: "<replace-with-secret>"
+    dbname: "sneaker_flash"
+    log_lever: 1
+    max_idle: 20
+    max_open: 200
+    max_lifetime: 1800
+    max_idle_time: 300
+    slow_threshold_ms: 300
+  redis:
+    addr: "127.0.0.1:6379"
+    password: "<replace-with-secret>"
+    db: 0
+    pool_size: 200
+    min_idle: 50
+    conn_timeout: 3
+  kafka:
+    brokers: ["127.0.0.1:9092"]
+    topic: "seckill_orders"
+    consumer_group: "sneaker-group-prod"
+    initial_offset: "oldest"
+    batch_size: 200
+    flush_interval: 100
+    max_retries: 5
+    dlq_topic: "seckill-order-dlq"
+    outbox_scan_interval: 10
+    outbox_timeout: 30
+
+jwt:
+  secret: "<replace-with-secret>"
+  expried: 3600
+  refresh_expried: 86400
+
+risk:
+  enable: true
+  login_rate: { rate: 50, burst: 100 }
+  seckill_rate: { rate: 1500, burst: 3000 }
+  pay_rate: { rate: 100, burst: 200 }
+  product_rate: { rate: 1000, burst: 1000 }
+  hotspot_burst: 100
+
+log:
+  level: "info"
+  path: "/var/log/sneakerflash/app.log"
+  max_age: 30
+  max_backups: 10
   max_size: 100
 ```
 
@@ -97,6 +176,8 @@ log:
 | --- | --- |
 | `brokers` | Broker 列表 |
 | `topic` | 秒杀主题 |
+| `consumer_group` | Worker 消费组 ID |
+| `initial_offset` | 消费组首次启动时的起始位点，支持 `oldest` / `newest` |
 | `batch_size` | 批量消费数量 |
 | `flush_interval` | 批量聚合等待时间 |
 | `max_retries` | 最大重试次数 |
@@ -121,12 +202,16 @@ log:
   - `SNEAKERFLASH_SERVER_PORT`
   - `SNEAKERFLASH_DATA_DATABASE_HOST`
   - `SNEAKERFLASH_RISK_ENABLE`
+  - `SNEAKERFLASH_DATA_KAFKA_CONSUMER_GROUP`
+  - `SNEAKERFLASH_DATA_KAFKA_INITIAL_OFFSET`
 
 ## 推荐配置建议
 ### 本地开发
 - `risk.enable=false`
-- Kafka broker 使用本地地址
+- Kafka broker 使用 `127.0.0.1:19092`
 - 日志级别使用 `info` 或 `debug`
+- 配套编排文件使用 `docker-compose.dev.yaml`
+- 推荐通过 `make dev-init` 生成 `.env.dev.local` 和 `config.dev.local.yml`
 
 ### 压测环境
 - 适当调高 Redis、DB 连接池
@@ -136,5 +221,7 @@ log:
 ### 生产环境
 - 禁止把真实密钥提交到仓库
 - Secret 放环境变量或密钥系统
+- 单机基线默认使用 `127.0.0.1:9092`
 - 明确区分 dev / stage / prod 配置
-
+- `docker-compose.prod.yaml` 只解决单机部署规范，不解决 Kafka 高可用
+- 推荐通过 `make prod-init` 生成 `.env.prod.local` 和 `config.prod.local.yml`

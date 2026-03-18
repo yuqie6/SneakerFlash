@@ -104,7 +104,7 @@ frontend/src/
 
 ## Configuration
 
-配置文件：`./config.yml` 或环境变量 `SNEAKERFLASH_CONFIG` 指定路径
+配置文件：统一通过环境变量 `SNEAKERFLASH_CONFIG` 指向 `config.<env>.local.yml`
 
 关键配置项：
 - `server.machineid`：Snowflake ID 机器号（必需）
