@@ -2,16 +2,16 @@
 
 ## 目标
 - 快速拉起本地依赖
-- 提供单机生产基线编排
-- 能定位常见链路问题
-- 能执行压测和观测
+- 提供单机生产部署方案
+- 能排查常见故障
+- 能执行压测和查看监控
 - 能处理 Docker、Kafka、Redis、订单 pending 等常见异常
 
 ## 编排文件
 | 文件 | 场景 | 说明 |
 | --- | --- | --- |
 | `docker-compose.dev.yaml` | 本地开发 / 联调 / 压测预演 | 配合 `.env.dev.local` 使用，暴露宿主机端口，包含 Kafka UI |
-| `docker-compose.prod.yaml` | 单机生产基线 | 配合 `.env.prod.local` 使用，收敛到 `127.0.0.1` 绑定，关闭 Kafka 自动建 topic |
+| `docker-compose.prod.yaml` | 单机生产 | 配合 `.env.prod.local` 使用，绑定 `127.0.0.1`，关闭 Kafka 自动建 topic |
 
 > `docker-compose.prod.yaml` 是单机部署基线，不提供 Kafka 多 broker / 多 controller 高可用；正式生产建议迁移到托管 Kafka 或至少 3 broker 集群。
 
@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | MySQL | `13306` | 订单、商品、支付、用户数据 |
 | Redis | `16379` | 秒杀库存、限流、pending 状态 |
-| Kafka | `19092` | 秒杀消息与异步建单 |
+| Kafka | `19092` | 秒杀消息队列 |
 | Kafka UI | `8080` | Kafka 可视化 |
 | Prometheus | `9090` | 指标采集 |
 | Grafana | `3000` | 指标面板 |
@@ -164,10 +164,10 @@ docker compose -f docker-compose.dev.yaml up -d
 systemctl cat docker
 ```
 
-## 补偿与治理
+## 消息重试与死信
 ### Outbox
-- `internal/cron/outbox_cron.go` 定时扫描未成功发送的消息
-- 若 Kafka 故障，消息最终通过补偿任务重试
+- `internal/cron/outbox_cron.go` 定时扫描发送失败的消息
+- Kafka 故障时，消息通过这个定时任务重试
 
 ### 死信
 - 超过重试阈值的消息进入 DLQ
@@ -176,9 +176,4 @@ systemctl cat docker
 ### Kafka 基线
 - 开发与生产基线都关闭自动建 topic，由 `kafka-init` 显式创建 `seckill_orders` / `seckill-order-dlq`
 - 开发环境暴露 `19092` 给宿主机；单机生产基线默认暴露 `127.0.0.1:9092`
-- 单机生产基线仍然只有 1 broker，副本因子只能为 1，不能替代真正的高可用 Kafka 集群
-
-## 推荐后续补强
-- 增加多节点生产环境部署文档
-- 增加告警阈值基线
-- 增加常见运维 SOP 与回滚手册
+- 单机生产只有 1 个 broker，副本因子只能为 1，不是高可用方案

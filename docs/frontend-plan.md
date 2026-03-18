@@ -1,8 +1,8 @@
-# SneakerFlash 前端执行方案（Editorial Ver.）
+# SneakerFlash 前端方案
 
 ## 目标与约束
-- 目标：打造编辑杂志风格的高并发秒杀/下单前端，交互流畅、状态透明（库存、下单、支付状态）。
-- 约束：对接当前后端接口（`docs/backend-api.md`），覆盖注册/登录/刷新、商品列表与详情、发布/管理商品、秒杀、订单与支付状态查看。遵循 KISS/YAGNI：仅落地已有接口，不预留未实现功能。
+- 目标：球鞋秒杀前端，覆盖注册登录、商品浏览与发布、秒杀、订单与支付状态查看。
+- 约束：对接当前后端接口（`docs/backend-api.md`），只做已有接口对应的功能，不预留未实现的。
 
 ## 技术栈与初始化
 - Vue 3 + TypeScript + Vite 5（Script Setup）
@@ -31,10 +31,10 @@ src/
 └─ router/index.ts
 ```
 
-## 设计系统（Editorial）
-- Tailwind：页面底色 `#F9F8F6`，纸张层级 `#FFFFFF`，正文与强调统一使用 `#1C1C1C` 及透明度层级；字体使用 `Playfair Display` 标题 + `Inter` 正文，按钮/卡片/弹层统一为硬边、细边框、无阴影。
-- 全局样式：保留极简基础 token 与 `hover-underline` 交互；禁止渐变、发光、彩色强调、圆角和阴影回流。
-- 组件：Button/Input/Card/Progress/Dialog/Toast Provider 通过 Shadcn 生成；`MagmaButton` 保留命名但视觉收敛为 Editorial 主按钮，`ParallaxCard` 仅用于轻量纸张位移，不再承担 3D 炫光表达。
+## 设计风格
+- Tailwind：页面底色 `#F9F8F6`，卡片白色 `#FFFFFF`，文字 `#1C1C1C`；字体标题用 `Playfair Display`、正文用 `Inter`；按钮和卡片统一硬边、细边框、无阴影。
+- 禁止：渐变、发光、彩色强调、圆角阴影。
+- 组件：Button/Input/Card/Progress/Dialog/Toast 用 Shadcn 生成；`MagmaButton` 是主按钮样式；`ParallaxCard` 只做轻微位移效果。
 
 ## API 对接要点
 - BaseURL：`http://localhost:8000/api/v1`
@@ -58,14 +58,14 @@ src/
 ## 开发里程碑
 1) 工程初始化 + Tailwind/Shadcn 配置 + 基础别名（`@/*`）。
 2) 公共层：`lib/api.ts`、`lib/utils.ts`、`types/*`、`stores/userStore`（登录、注销、鉴权状态）、`stores/productStore`（列表/详情缓存）。
-3) UI 基座：Shadcn 组件生成、`MagmaButton`、`ParallaxCard`（仅保留克制的纸张式交互）。
+3) UI 组件：Shadcn 组件生成、`MagmaButton`、`ParallaxCard`。
 4) 路由 & 布局：AuthLayout、MainLayout、路由守卫。
 5) 页面：
-   - Auth：纸张式表单，登录成功存 token 跳首页。
-   - Home：杂志式 Hero + 商品列表，细边框库存条、倒计时、克制 hover。
-   - Product Detail：左右分栏，按钮状态（Pending/Active/Loading/Result），保留摇动失败反馈，可选库存轮询，支持秒杀/下单入口。
+   - Auth：登录/注册表单，登录成功存 token 跳首页。
+   - Home：商品列表，带库存条、倒计时、hover 效果。
+   - Product Detail：左右分栏，按钮显示不同状态（未开始/进行中/加载中/结果），秒杀失败时按钮抖动，可选库存轮询。
    - Orders：列表（分页、状态筛选）、详情展示订单+支付状态。
-6) 体验：引入 Motion-v + Lenis，全局 toast provider，焦点态/加载遮罩。
+6) 动效与体验：Motion-v + Lenis 平滑滚动，全局 toast，加载遮罩。
 
 ## 测试与验证
 - 运行 `pnpm dev` 验证路由与接口调用（需后端/Redis/Kafka 就绪）。

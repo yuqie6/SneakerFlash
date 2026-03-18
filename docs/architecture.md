@@ -1,10 +1,10 @@
 # 架构概览
 
 ## 目标
-- 在秒杀入口承受高并发请求
-- 保障库存、订单、支付状态的一致性
-- 将热点链路与重事务链路解耦
-- 为风控、观测、补偿、VIP/优惠券提供扩展点
+- 秒杀入口扛住高并发
+- 库存、订单、支付状态保持一致
+- 高并发入口和数据库写入分开处理
+- 支持限流风控、监控、消息重试、VIP 和优惠券
 
 ## 系统分层
 ```text
@@ -16,20 +16,20 @@ handler -> service -> repository
 
 ### 分层职责
 - `internal/handler`：参数绑定、鉴权后的请求校验、响应映射
-- `internal/service`：业务编排、事务、一致性、缓存、异步状态管理
+- `internal/service`：业务逻辑、事务、缓存、异步状态
 - `internal/repository`：数据库访问与查询封装
-- `internal/middlerware`：JWT、日志、指标、限流、黑灰名单
-- `internal/infra`：Redis/Kafka 基础设施初始化与封装
-- `internal/pkg`：错误码、日志、JWT、Snowflake、VIP 等通用能力
+- `internal/middlerware`：JWT、日志、指标、限流、黑名单
+- `internal/infra`：Redis/Kafka 初始化
+- `internal/pkg`：错误码、日志、JWT、Snowflake、VIP 等工具
 
 ## 进程拓扑
 ### API 进程
 - 入口：`cmd/api/main.go`
-- 作用：对外暴露 HTTP API，初始化 DB/Redis/Kafka Producer、自动迁移、修正过期优惠券
+- 作用：对外提供 HTTP API，初始化数据库/Redis/Kafka，自动迁移，修正过期优惠券
 
 ### Worker 进程
 - 入口：`cmd/worker/main.go`
-- 作用：批量消费 Kafka 秒杀消息，执行 Outbox 补偿与 VIP 月度发券定时任务
+- 作用：批量消费 Kafka 秒杀消息，执行消息补偿和 VIP 月度发券定时任务
 
 ## 核心时序
 ```mermaid
@@ -44,13 +44,13 @@ sequenceDiagram
 
     U->>API: POST /seckill
     API->>DB: 查询商品与时间窗口
-    API->>R: Lua 防重 + 预扣库存
+    API->>R: Lua 检查重复 + 扣库存
     API->>O: 写 Outbox 消息
     API->>R: 写 pending 订单状态
     API-->>U: 返回 order_num/payment_id
     API->>K: 异步发送消息
     K->>W: 批量投递消息
-    W->>DB: 幂等检查 + 批量扣库 + 批量建单/支付
+    W->>DB: 查重 + 批量扣库存 + 批量创建订单和支付单
     W->>R: 更新 pending=ready/failed
     U->>API: GET /orders/poll/:order_num
     API-->>U: 返回 pending/ready/failed
@@ -63,14 +63,14 @@ sequenceDiagram
   - 本地内存令牌桶，先挡住突发流量
   - Redis 分布式桶，保证多实例下一致频控
 
-### 异步建单
-- 入口只负责“抢资格”
-- 订单落库交给 Kafka Worker
-- 这样把高并发热点与数据库事务解耦，减轻锁竞争与慢查询风险
+### 后台创建订单
+- 秒杀入口只负责”抢到资格”
+- 订单写入数据库的工作交给 Kafka Worker
+- 这样高并发请求不直接打数据库，减少锁竞争
 
 ### 前后端桥梁
 - Redis `PendingOrderCache` 承接秒杀结果状态
-- 前端无需等待同步建单完成，而是以低成本轮询获取 ready/failed
+- 前端不需要等订单同步写完，轮询就能拿到结果
 
 ## 一致性策略
 ### 库存一致性
@@ -88,7 +88,7 @@ sequenceDiagram
 - `order_num`：防重复消费建单
 - 支付状态条件更新：防重复回调
 
-## 支付 / VIP / 优惠券闭环
+## 支付、VIP、优惠券
 ### 支付
 - 支付回调只允许 `pending -> paid/failed/refunded`
 - 订单状态与支付状态同步推进
@@ -108,7 +108,7 @@ sequenceDiagram
 - `product_id` 支持热点参数限流
 - 黑名单 / 灰名单支持按用户与 IP 拦截
 
-## 可观测性
+## 监控
 - 指标入口：`/metrics`
 - 日志：`slog + lumberjack`
 - 面板：`Prometheus + Grafana`
