@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, computed } from "vue"
 import { RouterLink, useRoute, useRouter } from "vue-router"
-import { Clock, Package, Zap, ShoppingBag } from "lucide-vue-next"
 import MainLayout from "@/layout/MainLayout.vue"
 import MagmaButton from "@/components/motion/MagmaButton.vue"
-import ParallaxCard from "@/components/motion/ParallaxCard.vue"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useProductStore } from "@/stores/productStore"
 import { useSeckill, type SeckillResult } from "@/composables/useSeckill"
@@ -97,7 +95,6 @@ const pollOrderStatus = async (orderNum: string) => {
       if (orderPollTimer.value) clearInterval(orderPollTimer.value)
     }
   } catch (err: any) {
-    // 静默重试，长时间失败用户可手动刷新
     console.error(err)
   }
 }
@@ -114,25 +111,24 @@ const buttonClass = computed(() => ({
   "animate-shake": status.value === "failed",
 }))
 const cover = computed(
-  () => resolveAssetUrl(product.value?.image) || "https://dummyimage.com/900x600/0f0f14/ffffff&text=SneakerFlash"
+  () => resolveAssetUrl(product.value?.image) || "https://dummyimage.com/900x600/F9F8F6/1C1C1C&text=SneakerFlash"
 )
 
 const stockStatus = computed(() => {
   const stock = product.value?.stock || 0
-  if (stock === 0) return { text: "已售罄", tone: "border-red-500/40 bg-red-500/15 text-red-200" }
-  if (stock <= 10) return { text: "库存紧张", tone: "border-amber-500/40 bg-amber-500/15 text-amber-200" }
-  return { text: "库存充足", tone: "border-emerald-500/40 bg-emerald-500/15 text-emerald-200" }
+  if (stock === 0) return { text: "已售罄", tone: "border-[#1C1C1C]/30 text-[#1C1C1C]/50" }
+  if (stock <= 10) return { text: "库存紧张", tone: "border-[#1C1C1C]/25 text-[#1C1C1C]/70" }
+  return { text: "库存充足", tone: "border-[#1C1C1C]/20 text-[#1C1C1C]/70" }
 })
 
 const seckillStatus = computed(() => {
-  // 判断是否已过期
   const endTime = product.value?.end_time
   if (endTime && new Date(endTime) < new Date()) {
-    return { text: "已结束", tone: "border-white/20 bg-white/5 text-white/50" }
+    return { text: "已结束", tone: "border-[#1C1C1C]/10 text-[#1C1C1C]/40" }
   }
-  if (!isStarted.value) return { text: "即将开始", tone: "border-magma/40 bg-magma/15 text-magma" }
-  if (product.value?.stock === 0) return { text: "已售罄", tone: "border-white/20 bg-white/5 text-white/50" }
-  return { text: "抢购中", tone: "border-emerald-500/40 bg-emerald-500/15 text-emerald-200" }
+  if (!isStarted.value) return { text: "即将开始", tone: "border-[#1C1C1C]/20 text-[#1C1C1C]/70" }
+  if (product.value?.stock === 0) return { text: "已售罄", tone: "border-[#1C1C1C]/10 text-[#1C1C1C]/40" }
+  return { text: "抢购中", tone: "border-[#1C1C1C]/20 text-[#1C1C1C]/70" }
 })
 
 const isEnded = computed(() => {
@@ -150,117 +146,87 @@ const formatDateTime = (dateStr?: string) => {
 
 <template>
   <MainLayout>
-    <section class="relative mx-auto max-w-6xl px-6 py-12">
-      <div class="pointer-events-none absolute inset-0 opacity-70 [mask-image:radial-gradient(ellipse_at_center,white,transparent)]">
-        <div class="absolute -left-10 top-0 h-64 w-64 rounded-full bg-magma-glow blur-3xl"></div>
-        <div class="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-[#ea580c55] blur-3xl"></div>
-      </div>
-
-      <div v-if="product" class="relative flex flex-col gap-6">
-        <!-- 页面标题区域 -->
+    <section class="mx-auto max-w-6xl px-6 py-16 md:py-24">
+      <div v-if="product" class="flex flex-col gap-8">
+        <!-- 页面标题 -->
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div class="space-y-2">
-            <p class="flex items-center gap-2 text-sm uppercase tracking-[0.3em] text-magma">
-              <Zap class="h-4 w-4" />
-              Flash Sale
-            </p>
-            <h1 class="text-3xl font-semibold">{{ product.name }}</h1>
+          <div class="space-y-1">
+            <p class="text-xs uppercase tracking-[0.3em] text-[#1C1C1C]/40">Flash Sale</p>
+            <h1 class="font-serif text-3xl tracking-tight md:text-5xl">{{ product.name }}</h1>
           </div>
           <div class="flex items-center gap-3">
-            <span class="rounded-full border px-3 py-1 text-xs" :class="seckillStatus.tone">
-              {{ seckillStatus.text }}
-            </span>
-            <span class="rounded-full border px-3 py-1 text-xs" :class="stockStatus.tone">
-              {{ stockStatus.text }}
-            </span>
+            <span class="border px-3 py-1 text-xs" :class="seckillStatus.tone">{{ seckillStatus.text }}</span>
+            <span class="border px-3 py-1 text-xs" :class="stockStatus.tone">{{ stockStatus.text }}</span>
           </div>
         </div>
 
-        <!-- 信息概览四宫格 -->
+        <!-- 四宫格 -->
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div class="rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80 p-4">
-            <p class="text-sm text-white/60">商品价格</p>
-            <div class="mt-2 text-2xl font-semibold text-magma">{{ formatPrice(product.price) }}</div>
+          <div class="border border-[#1C1C1C]/10 p-4">
+            <p class="text-xs uppercase tracking-[0.2em] text-[#1C1C1C]/40">Price</p>
+            <div class="mt-2 text-2xl">{{ formatPrice(product.price) }}</div>
           </div>
-          <div class="rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80 p-4">
-            <p class="text-sm text-white/60">剩余库存</p>
-            <div class="mt-2 flex items-center gap-2 text-xl font-semibold text-white">
-              {{ product.stock }}
-              <span class="rounded-full border border-obsidian-border px-2 py-0.5 text-xs text-white/70">件</span>
-            </div>
+          <div class="border border-[#1C1C1C]/10 p-4">
+            <p class="text-xs uppercase tracking-[0.2em] text-[#1C1C1C]/40">Stock</p>
+            <div class="mt-2 text-xl">{{ product.stock }} <span class="text-xs text-[#1C1C1C]/40">件</span></div>
           </div>
-          <div class="rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80 p-4">
-            <p class="text-sm text-white/60">开抢时间</p>
-            <div class="mt-2 text-sm font-semibold text-white">{{ formatDateTime(product.start_time) }}</div>
+          <div class="border border-[#1C1C1C]/10 p-4">
+            <p class="text-xs uppercase tracking-[0.2em] text-[#1C1C1C]/40">Start</p>
+            <div class="mt-2 text-sm">{{ formatDateTime(product.start_time) }}</div>
           </div>
-          <div class="rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80 p-4">
-            <p class="text-sm text-white/60">结束时间</p>
-            <div class="mt-2 text-sm font-semibold" :class="isEnded ? 'text-red-400' : 'text-white'">
+          <div class="border border-[#1C1C1C]/10 p-4">
+            <p class="text-xs uppercase tracking-[0.2em] text-[#1C1C1C]/40">End</p>
+            <div class="mt-2 text-sm" :class="isEnded ? 'text-[#1C1C1C]/40' : ''">
               {{ product.end_time ? formatDateTime(product.end_time) : '永不过期' }}
             </div>
           </div>
         </div>
 
-        <!-- 主要内容区：图片 + 秒杀卡片 -->
-        <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <!-- 左侧：商品图片 -->
+        <!-- 主内容：图片 + 秒杀 -->
+        <div class="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+          <!-- 图片 -->
           <div class="relative">
-            <ParallaxCard class="glass">
-              <img :src="cover" alt="" class="h-[420px] w-full rounded-2xl object-cover lg:h-[480px]" />
-            </ParallaxCard>
+            <div class="border border-[#1C1C1C]/10">
+              <img :src="cover" alt="" class="h-[420px] w-full object-cover lg:h-[480px]" />
+            </div>
             <div
               v-if="isLoading"
-              class="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/60 backdrop-blur-sm transition"
+              class="absolute inset-0 flex items-center justify-center bg-white/80 transition"
             >
-              <div class="flex items-center gap-2 text-sm text-white/80">
-                <span class="h-3 w-3 animate-pulse rounded-full bg-magma"></span>
+              <div class="flex items-center gap-2 text-sm text-[#1C1C1C]/60">
+                <span class="h-3 w-3 animate-pulse bg-[#1C1C1C]"></span>
                 锁定中，请稍候...
               </div>
             </div>
           </div>
 
-          <!-- 右侧：秒杀信息 -->
-          <div class="flex flex-col gap-4">
-            <Card class="border-obsidian-border/70 bg-gradient-to-br from-obsidian-card via-black to-obsidian-card">
+          <!-- 秒杀信息 -->
+          <div class="flex flex-col gap-6">
+            <Card>
               <CardHeader>
-                <CardTitle class="flex items-center gap-2 text-xl">
-                  <ShoppingBag class="h-5 w-5 text-magma" />
-                  秒杀抢购
-                </CardTitle>
-                <CardDescription>限时特惠，手快有手慢无</CardDescription>
+                <CardTitle class="font-serif text-xl tracking-tight">秒杀抢购</CardTitle>
+                <CardDescription class="text-[#1C1C1C]/40">限时特惠，手快有手慢无</CardDescription>
               </CardHeader>
               <CardContent class="space-y-5">
                 <!-- 库存进度 -->
-                <div class="relative overflow-hidden rounded-2xl border border-obsidian-border/70 bg-gradient-to-r from-white/5 via-black/70 to-black/40 p-5">
-                  <div class="pointer-events-none absolute inset-0">
-                    <div class="absolute left-10 top-0 h-full w-1/2 bg-magma-glow blur-3xl"></div>
+                <div class="border border-[#1C1C1C]/10 p-5">
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-[#1C1C1C]/60">库存进度</span>
+                    <span class="text-xs text-[#1C1C1C]/40">剩余 {{ product.stock }} 件</span>
                   </div>
-                  <div class="relative space-y-4">
-                    <div class="flex items-center justify-between text-sm">
-                      <span class="text-white/70">库存进度</span>
-                      <span class="rounded-full border border-obsidian-border px-3 py-1 text-xs text-white/60">
-                        剩余 {{ product.stock }} 件
-                      </span>
-                    </div>
-                    <div class="relative h-3 w-full overflow-hidden rounded-full bg-white/10">
-                      <div
-                        class="h-full rounded-full bg-gradient-to-r from-magma to-amber-200 shadow-[0_0_20px_rgba(234,88,12,0.35)] transition-[width] duration-500 ease-out"
-                        :style="`width: ${progressValue}%`"
-                      >
-                        <div class="absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border border-white/60 bg-white shadow-[0_0_15px_rgba(255,255,255,0.7)]"></div>
-                      </div>
-                    </div>
+                  <div class="relative mt-4 h-1 w-full bg-[#1C1C1C]/10">
+                    <div
+                      class="h-full bg-[#1C1C1C] transition-[width] duration-500 ease-out"
+                      :style="`width: ${progressValue}%`"
+                    ></div>
                   </div>
                 </div>
 
-                <!-- 倒计时 + 抢购按钮 -->
-                <div class="rounded-2xl border border-obsidian-border/80 bg-black/30 p-5">
+                <!-- 倒计时 + 按钮 -->
+                <div class="border border-[#1C1C1C]/10 p-5">
                   <div class="mb-4 flex items-center justify-between">
-                    <div class="flex items-center gap-2 text-sm text-white/70">
-                      <Clock class="h-4 w-4" />
-                      <span>{{ isStarted ? "活动进行中" : "距离开始" }}</span>
-                    </div>
-                    <span class="text-xl font-semibold text-magma">{{ isStarted ? "立即参与" : formatted }}</span>
+                    <span class="text-sm text-[#1C1C1C]/60">{{ isStarted ? "活动进行中" : "距离开始" }}</span>
+                    <span class="font-serif text-xl">{{ isStarted ? "立即参与" : formatted }}</span>
                   </div>
                   <MagmaButton
                     class="w-full justify-center"
@@ -278,55 +244,52 @@ const formatDateTime = (dateStr?: string) => {
                   </MagmaButton>
                   <div
                     v-if="seckillResult"
-                    class="mt-4 flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm"
+                    class="mt-4 flex items-center justify-between border border-[#1C1C1C]/20 bg-[#1C1C1C]/5 px-4 py-3 text-sm"
                   >
                     <div>
-                      <p class="font-semibold text-emerald-300">
+                      <p class="font-medium">
                         {{ seckillResult.status === "pending" ? "订单生成中" : "已锁定订单，前往支付" }}
                       </p>
-                      <p class="text-xs text-white/60">订单号：{{ seckillResult.order_num }}</p>
+                      <p class="text-xs text-[#1C1C1C]/40">订单号：{{ seckillResult.order_num }}</p>
                     </div>
                     <RouterLink
                       v-if="seckillResult.order_id"
                       :to="`/orders/${seckillResult.order_id}`"
-                      class="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-black transition hover:bg-emerald-400"
+                      class="bg-[#1C1C1C] px-3 py-1 text-xs text-white transition-colors hover:bg-[#1C1C1C]/80"
                     >
                       去支付
                     </RouterLink>
-                    <span v-else class="text-xs text-emerald-200">正在生成订单...</span>
+                    <span v-else class="text-xs text-[#1C1C1C]/40">正在生成订单...</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <!-- 购买须知 -->
-            <Card class="border-obsidian-border/70 bg-obsidian-card/80">
+            <Card>
               <CardHeader>
-                <CardTitle class="flex items-center gap-2 text-lg">
-                  <Package class="h-5 w-5 text-magma" />
-                  购买须知
-                </CardTitle>
+                <CardTitle class="font-serif text-lg tracking-tight">购买须知</CardTitle>
               </CardHeader>
-              <CardContent class="space-y-3 text-sm text-white/70">
+              <CardContent class="space-y-3 text-sm text-[#1C1C1C]/60">
                 <div class="flex items-start gap-3">
-                  <span class="mt-1 h-2 w-2 rounded-full bg-magma"></span>
+                  <span class="mt-1.5 h-1 w-1 bg-[#1C1C1C]/70"></span>
                   <div>
-                    <p class="font-semibold text-white">一键抢购</p>
-                    <p class="text-white/60">点击立即抢购，成功后自动生成订单</p>
+                    <p class="font-medium text-[#1C1C1C]">一键抢购</p>
+                    <p class="text-[#1C1C1C]/40">点击立即抢购，成功后自动生成订单</p>
                   </div>
                 </div>
                 <div class="flex items-start gap-3">
-                  <span class="mt-1 h-2 w-2 rounded-full bg-emerald-400"></span>
+                  <span class="mt-1.5 h-1 w-1 bg-[#1C1C1C]"></span>
                   <div>
-                    <p class="font-semibold text-white">自动跳转</p>
-                    <p class="text-white/60">锁定成功后自动跳转到订单详情页完成支付</p>
+                    <p class="font-medium text-[#1C1C1C]">自动跳转</p>
+                    <p class="text-[#1C1C1C]/40">锁定成功后自动跳转到订单详情页完成支付</p>
                   </div>
                 </div>
                 <div class="flex items-start gap-3">
-                  <span class="mt-1 h-2 w-2 rounded-full bg-white/60"></span>
+                  <span class="mt-1.5 h-1 w-1 bg-[#1C1C1C]/40"></span>
                   <div>
-                    <p class="font-semibold text-white">失败可重试</p>
-                    <p class="text-white/60">库存不足或重复抢购会提示原因，不会生成多余订单</p>
+                    <p class="font-medium text-[#1C1C1C]">失败可重试</p>
+                    <p class="text-[#1C1C1C]/40">库存不足或重复抢购会提示原因，不会生成多余订单</p>
                   </div>
                 </div>
               </CardContent>
@@ -335,17 +298,17 @@ const formatDateTime = (dateStr?: string) => {
         </div>
       </div>
 
-      <!-- 加载骨架屏 -->
-      <div v-else class="relative flex flex-col gap-6">
-        <div class="h-10 w-1/3 animate-pulse rounded-lg bg-white/10"></div>
+      <!-- 骨架屏 -->
+      <div v-else class="flex flex-col gap-6">
+        <div class="h-10 w-1/3 animate-pulse bg-[#1C1C1C]/5"></div>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div v-for="i in 4" :key="i" class="h-24 animate-pulse rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80"></div>
+          <div v-for="i in 4" :key="i" class="h-24 animate-pulse border border-[#1C1C1C]/10 bg-[#1C1C1C]/5"></div>
         </div>
         <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div class="h-[480px] animate-pulse rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80"></div>
+          <div class="h-[480px] animate-pulse border border-[#1C1C1C]/10 bg-[#1C1C1C]/5"></div>
           <div class="space-y-4">
-            <div class="h-64 animate-pulse rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80"></div>
-            <div class="h-48 animate-pulse rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80"></div>
+            <div class="h-64 animate-pulse border border-[#1C1C1C]/10 bg-[#1C1C1C]/5"></div>
+            <div class="h-48 animate-pulse border border-[#1C1C1C]/10 bg-[#1C1C1C]/5"></div>
           </div>
         </div>
       </div>

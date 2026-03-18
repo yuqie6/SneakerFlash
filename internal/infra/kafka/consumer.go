@@ -3,6 +3,7 @@ package kafka
 import (
 	"SneakerFlash/internal/config"
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -133,7 +134,7 @@ func (h *BatchConsumerHandler) flush() {
 
 // msgKey 生成消息唯一键用于重试计数
 func msgKey(msg *sarama.ConsumerMessage) string {
-	return string(msg.Value[:min(32, len(msg.Value))]) // 使用消息前32字节作为key
+	return fmt.Sprintf("%s:%d:%d", msg.Topic, msg.Partition, msg.Offset)
 }
 
 // flushLocked 刷盘（调用前需持有锁）
@@ -245,8 +246,8 @@ func (h *BatchConsumerHandler) handleFailedMessage(item msgWithSession, lastErr 
 func (h *BatchConsumerHandler) getAndIncrRetryCount(key string) int {
 	h.retryMu.Lock()
 	defer h.retryMu.Unlock()
-	count := h.retryCount[key]
-	h.retryCount[key] = count + 1
+	count := h.retryCount[key] + 1
+	h.retryCount[key] = count
 	return count
 }
 

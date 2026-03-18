@@ -56,23 +56,33 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 	ctx := logger.ContextWithValues(context.Background(), "batch_size", len(msgBodies))
 	startTime := time.Now()
 
-	// 1. 解析所有消息
-	msgs := make([]*SeckillMessage, 0, len(msgBodies))
-	for _, body := range msgBodies {
-		var msg SeckillMessage
-		if err := json.Unmarshal(body, &msg); err != nil {
-			slog.WarnContext(ctx, "消息解析失败，跳过", slog.String("error", err.Error()))
+	type msgItem struct {
+		idx  int
+		body []byte
+		msg  *SeckillMessage
+	}
+
+	// 1. 解析所有消息（保留原始索引，确保 failedIndexes 与 Consumer buffer 对齐）
+	items := make([]*msgItem, 0, len(msgBodies))
+	resultsByIdx := make(map[int]orderResult, len(msgBodies))
+	for i, body := range msgBodies {
+		var m SeckillMessage
+		if err := json.Unmarshal(body, &m); err != nil {
+			slog.WarnContext(ctx, "消息解析失败", slog.Int("idx", i), slog.String("error", err.Error()))
+			resultsByIdx[i] = orderResult{orderNum: "", success: false, errMsg: "消息解析失败"}
 			continue
 		}
-		msgs = append(msgs, &msg)
+		items = append(items, &msgItem{idx: i, body: body, msg: &m})
 	}
 
-	if len(msgs) == 0 {
-		return nil, nil
+	// 解析全挂了：直接返回所有索引（让 consumer 走重试/DLQ）
+	if len(items) == 0 {
+		all := make([]int, len(msgBodies))
+		for i := range all {
+			all[i] = i
+		}
+		return all, nil
 	}
-
-	// 记录处理结果
-	results := make([]orderResult, 0, len(msgs))
 
 	// 2. 开启数据库事务
 	txErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -81,10 +91,10 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 		txProductRepo := repository.NewProductRepo(tx)
 
 		// 2.1 批量幂等检查 - 按 order_num 查询已存在的订单
-		orderNums := make([]string, 0, len(msgs))
-		for _, msg := range msgs {
-			if msg.OrderNum != "" {
-				orderNums = append(orderNums, msg.OrderNum)
+		orderNums := make([]string, 0, len(items))
+		for _, it := range items {
+			if it.msg != nil && it.msg.OrderNum != "" {
+				orderNums = append(orderNums, it.msg.OrderNum)
 			}
 		}
 
@@ -100,35 +110,32 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 		}
 
 		// 2.2 过滤已存在的订单，收集新订单
-		newMsgs := make([]*SeckillMessage, 0, len(msgs))
-		for _, msg := range msgs {
-			if existing, ok := existingOrderMap[msg.OrderNum]; ok {
-				// 已存在，直接记录成功
+		newItems := make([]*msgItem, 0, len(items))
+		for _, it := range items {
+			if it.msg == nil {
+				continue
+			}
+			if existing, ok := existingOrderMap[it.msg.OrderNum]; ok {
+				// 已存在，记录成功（幂等）
 				payment, _ := txPaymentRepo.GetByOrderID(ctx, existing.ID)
-				pid := msg.PaymentID
+				pid := it.msg.PaymentID
 				if payment != nil && payment.PaymentID != "" {
 					pid = payment.PaymentID
 				}
-				results = append(results, orderResult{
-					orderNum:  existing.OrderNum,
-					orderID:   existing.ID,
-					paymentID: pid,
-					success:   true,
-				})
+				resultsByIdx[it.idx] = orderResult{orderNum: existing.OrderNum, orderID: existing.ID, paymentID: pid, success: true}
 				continue
 			}
-			newMsgs = append(newMsgs, msg)
+			newItems = append(newItems, it)
 		}
 
-		if len(newMsgs) == 0 {
-			slog.InfoContext(ctx, "所有订单已存在，无需处理")
+		if len(newItems) == 0 {
 			return nil
 		}
 
 		// 2.3 按 productID 分组统计扣库存数量
 		stockDeductions := make(map[uint]int64)
-		for _, msg := range newMsgs {
-			stockDeductions[msg.ProductID]++
+		for _, it := range newItems {
+			stockDeductions[it.msg.ProductID]++
 		}
 
 		// 2.4 批量扣减库存
@@ -139,45 +146,31 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 				return fmt.Errorf("扣减库存失败 productID=%d: %w", productID, err)
 			}
 			if rowsAffected == 0 {
-				// 库存不足，需要标记该商品的所有消息失败
-				for _, msg := range newMsgs {
-					if msg.ProductID == productID {
-						results = append(results, orderResult{
-							orderNum: msg.OrderNum,
-							success:  false,
-							errMsg:   "库存不足",
-						})
+				// 库存不足：标记该商品所有消息失败，并从待处理集合剔除
+				filtered := make([]*msgItem, 0, len(newItems))
+				for _, it := range newItems {
+					if it.msg.ProductID == productID {
+						resultsByIdx[it.idx] = orderResult{orderNum: it.msg.OrderNum, success: false, errMsg: "库存不足"}
+						continue
 					}
+					filtered = append(filtered, it)
 				}
-				// 过滤掉该商品的消息
-				filtered := make([]*SeckillMessage, 0, len(newMsgs))
-				for _, msg := range newMsgs {
-					if msg.ProductID != productID {
-						filtered = append(filtered, msg)
-					}
-				}
-				newMsgs = filtered
+				newItems = filtered
 				continue
 			}
-			// 获取最新库存用于缓存刷新
 			if product, err := txProductRepo.GetByID(ctx, productID); err == nil {
 				productStocks[productID] = product.Stock
 			}
 		}
 
-		if len(newMsgs) == 0 {
+		if len(newItems) == 0 {
 			return nil
 		}
 
 		// 2.5 构建订单列表
-		orders := make([]*model.Order, 0, len(newMsgs))
-		for _, msg := range newMsgs {
-			orders = append(orders, &model.Order{
-				UserID:    msg.UserID,
-				ProductID: msg.ProductID,
-				OrderNum:  msg.OrderNum,
-				Status:    model.OrderStatusUnpaid,
-			})
+		orders := make([]*model.Order, 0, len(newItems))
+		for _, it := range newItems {
+			orders = append(orders, &model.Order{UserID: it.msg.UserID, ProductID: it.msg.ProductID, OrderNum: it.msg.OrderNum, Status: model.OrderStatusUnpaid})
 		}
 
 		// 2.6 批量插入订单
@@ -186,8 +179,9 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 		}
 
 		// 2.7 构建支付单列表
-		payments := make([]*model.Payment, 0, len(newMsgs))
-		for i, msg := range newMsgs {
+		payments := make([]*model.Payment, 0, len(newItems))
+		for i, it := range newItems {
+			msg := it.msg
 			paymentID := msg.PaymentID
 			if paymentID == "" {
 				genID, err := utils.GenSnowflakeID()
@@ -206,12 +200,7 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 				amountCents = int64(math.Round(product.Price * 100))
 			}
 
-			payments = append(payments, &model.Payment{
-				OrderID:     orders[i].ID, // 批量插入后 GORM 会填充 ID
-				PaymentID:   paymentID,
-				AmountCents: amountCents,
-				Status:      model.PaymentStatusPending,
-			})
+			payments = append(payments, &model.Payment{OrderID: orders[i].ID, PaymentID: paymentID, AmountCents: amountCents, Status: model.PaymentStatusPending})
 		}
 
 		// 2.8 批量插入支付单
@@ -219,14 +208,9 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 			return fmt.Errorf("批量创建支付单失败: %w", err)
 		}
 
-		// 2.9 收集成功结果
-		for i, order := range orders {
-			results = append(results, orderResult{
-				orderNum:  order.OrderNum,
-				orderID:   order.ID,
-				paymentID: payments[i].PaymentID,
-				success:   true,
-			})
+		// 2.9 收集成功结果（按原始索引写回）
+		for i, it := range newItems {
+			resultsByIdx[it.idx] = orderResult{orderNum: orders[i].OrderNum, orderID: orders[i].ID, paymentID: payments[i].PaymentID, success: true}
 		}
 
 		// 2.10 异步刷新库存缓存
@@ -242,36 +226,42 @@ func (s *WorkerService) BatchCreateOrdersFromMessages(msgBodies [][]byte) (faile
 	if txErr != nil {
 		slog.ErrorContext(ctx, "批量事务失败", slog.Any("error", txErr))
 		// 事务失败，回滚所有 Redis 库存，返回所有消息索引作为失败
-		for _, msg := range msgs {
-			rollbackRedisStock(ctx, msg.ProductID, msg.UserID)
-			markPendingOrderFailed(ctx, msg.OrderNum, txErr.Error())
+		for _, it := range items {
+			rollbackRedisStock(ctx, it.msg.ProductID, it.msg.UserID)
+			markPendingOrderFailed(ctx, it.msg.OrderNum, txErr.Error())
 		}
-		// 返回所有消息的索引作为失败
-		allIndexes := make([]int, len(msgBodies))
-		for i := range allIndexes {
-			allIndexes[i] = i
+		all := make([]int, len(msgBodies))
+		for i := range all {
+			all[i] = i
 		}
-		return allIndexes, txErr
+		return all, txErr
 	}
 
-	// 4. 批量更新 Redis pending 状态
+	// 4. 批量更新 Redis pending 状态（跳过没有 orderNum 的结果）
+	results := make([]orderResult, 0, len(resultsByIdx))
+	for _, r := range resultsByIdx {
+		if r.orderNum != "" {
+			results = append(results, r)
+		}
+	}
 	s.batchUpdatePendingStatus(ctx, results)
 
 	elapsed := time.Since(startTime)
 	slog.InfoContext(ctx, "批量处理完成",
-		slog.Int("total", len(msgs)),
+		slog.Int("total", len(items)),
 		slog.Int("success", countSuccess(results)),
 		slog.Duration("elapsed", elapsed),
 	)
 
-	// 收集失败的消息索引
-	var failed []int
-	for i, r := range results {
-		if !r.success {
-			failed = append(failed, i)
+	// 5. 收集失败索引（必须与 msgBodies 对齐）
+	failed := make([]int, 0)
+	for i := 0; i < len(msgBodies); i++ {
+		if r, ok := resultsByIdx[i]; ok {
+			if !r.success {
+				failed = append(failed, i)
+			}
 		}
 	}
-
 	return failed, nil
 }
 

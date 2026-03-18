@@ -83,7 +83,7 @@ swag init -g ./cmd/api/main.go -o ./docs
 ### 前端
 - API 统一走 `frontend/src/lib/api.ts`
 - 共享状态优先放在 Pinia store
-- 保持暗夜黑金视觉风格一致
+- 保持 Editorial 视觉风格一致：浅底纸张层次、硬边细边框、克制动效
 
 ## 代码检查
 ### Go
@@ -113,4 +113,3 @@ swag init -g ./cmd/api/main.go -o ./docs
 - 秒杀永远 pending：Worker 未启动、Kafka 不通、Outbox 补偿未生效
 
 更详细的排查手册见 `troubleshooting.md`
-

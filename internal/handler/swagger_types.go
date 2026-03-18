@@ -39,6 +39,34 @@ type UploadURLResponse struct {
 	URL string `json:"url"`
 }
 
+// HealthStatusResponse 存活检查响应。
+type HealthStatusResponse struct {
+	Status    string    `json:"status"`
+	Service   string    `json:"service"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// ProbeStatusResponse 单个依赖探针状态。
+type ProbeStatusResponse struct {
+	Status string `json:"status"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// ReadinessChecksResponse 就绪检查明细。
+type ReadinessChecksResponse struct {
+	Database ProbeStatusResponse `json:"database"`
+	Redis    ProbeStatusResponse `json:"redis"`
+	Kafka    ProbeStatusResponse `json:"kafka"`
+}
+
+// ReadinessStatusResponse 就绪检查响应。
+type ReadinessStatusResponse struct {
+	Status    string                  `json:"status"`
+	Service   string                  `json:"service"`
+	Timestamp time.Time               `json:"timestamp"`
+	Checks    ReadinessChecksResponse `json:"checks"`
+}
+
 // UserResponse 用户信息输出。
 type UserResponse struct {
 	ID        uint      `json:"ID"`

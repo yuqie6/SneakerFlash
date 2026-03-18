@@ -36,10 +36,10 @@
 
 ## 前端开发规范
 - 入口与布局：`src/main.ts` 注册 Pinia/Router/Lenis；页面布局在 `layout/MainLayout.vue`。
-- UI/样式：Tailwind 自定义 obsidian/magma 主题（`tailwind.config.js`、`assets/css/index.css`），基础组件在 `components/ui`（CVA 驱动），动效组件在 `components/motion`；优先复用现有组件/样式，不要重复引入 UI 库。
+- UI/样式：Tailwind 现为 Editorial 主题（`tailwind.config.js`、`assets/css/index.css`），基础色为 `#F9F8F6` / `#FFFFFF` / `#1C1C1C`，基础组件在 `components/ui`（CVA 驱动），动效组件在 `components/motion`；优先复用现有组件/样式，不要重复引入 UI 库。
 - 数据与状态：`lib/api.ts` 统一请求（校验 `code!=200` 抛错、自动 refresh token、本地键 `access_token`/`refresh_token`，含 `uploadImage`/`resolveAssetUrl`），组件或 store 通过该封装调用；已存在 store：`stores/userStore`、`stores/productStore`，其他页面可按需新增但保持相同模式。
 - 路由：`router/index.ts` 管理，`meta.requiresAuth` 需依赖用户态；视图按功能存放在 `views/`（Auth/Home/Product/Orders/User）。
-- 设计基调：暗夜黑金、玻璃态+流光动效（参考 `Home`/`Product` 页面），保持一致风格。
+- 设计基调：Editorial 杂志感、浅底纸张层次、硬边细边框、克制动效（参考 `Home`/`Product` 页面），保持一致风格。
 
 ## 测试与验证
 - 当前无自动化测试，改动核心逻辑（库存扣减、订单、限流、支付回调等）请补 Go 表驱动用例并确保 `go test ./...` 通过。

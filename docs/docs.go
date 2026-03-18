@@ -126,6 +126,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/health": {
+            "get": {
+                "description": "快速确认 HTTP 服务进程可响应",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "系统"
+                ],
+                "summary": "存活检查",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.HealthStatusResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/login": {
             "post": {
                 "description": "登录后下发 access/refresh token",
@@ -973,6 +1005,56 @@ const docTemplate = `{
                 }
             }
         },
+        "/ready": {
+            "get": {
+                "description": "校验 MySQL、Redis 与 Kafka Producer 是否可用",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "系统"
+                ],
+                "summary": "就绪检查",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.ReadinessStatusResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/app.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.ReadinessStatusResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/refresh": {
             "post": {
                 "description": "使用 refresh_token 刷新新的 access_token",
@@ -1384,6 +1466,20 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.HealthStatusResponse": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
         "handler.IDResponse": {
             "type": "object",
             "properties": {
@@ -1502,6 +1598,17 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.ProbeStatusResponse": {
+            "type": "object",
+            "properties": {
+                "detail": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "handler.ProductListResponse": {
             "type": "object",
             "properties": {
@@ -1558,6 +1665,37 @@ const docTemplate = `{
             "properties": {
                 "plan_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "handler.ReadinessChecksResponse": {
+            "type": "object",
+            "properties": {
+                "database": {
+                    "$ref": "#/definitions/handler.ProbeStatusResponse"
+                },
+                "kafka": {
+                    "$ref": "#/definitions/handler.ProbeStatusResponse"
+                },
+                "redis": {
+                    "$ref": "#/definitions/handler.ProbeStatusResponse"
+                }
+            }
+        },
+        "handler.ReadinessStatusResponse": {
+            "type": "object",
+            "properties": {
+                "checks": {
+                    "$ref": "#/definitions/handler.ReadinessChecksResponse"
+                },
+                "service": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
                 }
             }
         },

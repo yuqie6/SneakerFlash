@@ -1,7 +1,7 @@
-# SneakerFlash 前端执行方案（Midnight Magma Ver.）
+# SneakerFlash 前端执行方案（Editorial Ver.）
 
 ## 目标与约束
-- 目标：打造暗夜黑金风格的高并发秒杀/下单前端，交互流畅、状态透明（库存、下单、支付状态）。
+- 目标：打造编辑杂志风格的高并发秒杀/下单前端，交互流畅、状态透明（库存、下单、支付状态）。
 - 约束：对接当前后端接口（`docs/backend-api.md`），覆盖注册/登录/刷新、商品列表与详情、发布/管理商品、秒杀、订单与支付状态查看。遵循 KISS/YAGNI：仅落地已有接口，不预留未实现功能。
 
 ## 技术栈与初始化
@@ -31,10 +31,10 @@ src/
 └─ router/index.ts
 ```
 
-## 设计系统（暗夜黑金）
-- Tailwind：`obsidian` 背景、`magma` 主色、`magma-gradient` 背景、`pulse-fast` 动画，字体建议 Inter。
-- 全局样式：噪点纹理、`.glass` 工具类、`:root/.dark` 变量兼容 Shadcn；`body` 使用 `bg-obsidian-bg text-white`.
-- 组件：Button/Input/Card/Progress/Dialog/Toast Provider 通过 Shadcn 生成；自定义 `MagmaButton` 使用 shimmer + pulse。
+## 设计系统（Editorial）
+- Tailwind：页面底色 `#F9F8F6`，纸张层级 `#FFFFFF`，正文与强调统一使用 `#1C1C1C` 及透明度层级；字体使用 `Playfair Display` 标题 + `Inter` 正文，按钮/卡片/弹层统一为硬边、细边框、无阴影。
+- 全局样式：保留极简基础 token 与 `hover-underline` 交互；禁止渐变、发光、彩色强调、圆角和阴影回流。
+- 组件：Button/Input/Card/Progress/Dialog/Toast Provider 通过 Shadcn 生成；`MagmaButton` 保留命名但视觉收敛为 Editorial 主按钮，`ParallaxCard` 仅用于轻量纸张位移，不再承担 3D 炫光表达。
 
 ## API 对接要点
 - BaseURL：`http://localhost:8000/api/v1`
@@ -58,16 +58,16 @@ src/
 ## 开发里程碑
 1) 工程初始化 + Tailwind/Shadcn 配置 + 基础别名（`@/*`）。
 2) 公共层：`lib/api.ts`、`lib/utils.ts`、`types/*`、`stores/userStore`（登录、注销、鉴权状态）、`stores/productStore`（列表/详情缓存）。
-3) UI 基座：Shadcn 组件生成、`MagmaButton`、`ParallaxCard`。
+3) UI 基座：Shadcn 组件生成、`MagmaButton`、`ParallaxCard`（仅保留克制的纸张式交互）。
 4) 路由 & 布局：AuthLayout、MainLayout、路由守卫。
 5) 页面：
-   - Auth：玻璃态表单，登录成功存 token 跳首页。
-   - Home：Hero + 瀑布流列表，Hover 3D 倾斜，库存条、倒计时。
-   - Product Detail：左右分栏，按钮状态（Pending/Active/Loading/Result），结果动画（confetti/shake），可选库存轮询，支持秒杀/下单入口。
+   - Auth：纸张式表单，登录成功存 token 跳首页。
+   - Home：杂志式 Hero + 商品列表，细边框库存条、倒计时、克制 hover。
+   - Product Detail：左右分栏，按钮状态（Pending/Active/Loading/Result），保留摇动失败反馈，可选库存轮询，支持秒杀/下单入口。
    - Orders：列表（分页、状态筛选）、详情展示订单+支付状态。
 6) 体验：引入 Motion-v + Lenis，全局 toast provider，焦点态/加载遮罩。
 
 ## 测试与验证
 - 运行 `npm run dev` 验证路由与接口调用（需后端/Redis/Kafka 就绪）。
-- `npm run build` 或 `vue-tsc --noEmit` 做类型/构建检查。
+- `npm run build` 或 `npx vue-tsc --noEmit` 做类型/构建检查。
 - 手工覆盖：登录失败提示、列表空态、秒杀失败提示、token 失效跳转。

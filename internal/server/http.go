@@ -29,6 +29,7 @@ func NewHttpServer() *gin.Engine {
 	uploadServicer := service.NewUploadService(config.Conf.Server.UploadDir)
 	couponServicer := service.NewCouponService(db.DB)
 	vipServicer := service.NewVIPService(db.DB, userRepo, couponServicer)
+	healthServicer := service.NewHealthService()
 
 	// handler 层
 	userHandler := handler.NewUserHandler(userServicer)
@@ -38,6 +39,7 @@ func NewHttpServer() *gin.Engine {
 	uploadHandler := handler.NewUploadHandler(uploadServicer)
 	vipHandler := handler.NewVIPHandler(vipServicer)
 	couponHandler := handler.NewCouponHandler(couponServicer)
+	healthHandler := handler.NewHealthHandler(healthServicer)
 
 	// 注册路由
 	r := gin.New()
@@ -67,6 +69,8 @@ func NewHttpServer() *gin.Engine {
 	r.GET("/metrics", func(c *gin.Context) {
 		middlerware.MetricsHandler(c)
 	})
+	r.GET("/health", healthHandler.Health)
+	r.GET("/ready", healthHandler.Ready)
 
 	// 处理预检请求
 	r.OPTIONS("/*path", func(c *gin.Context) {

@@ -1,8 +1,18 @@
 # SneakerFlash 后端接口文档（当前实现）
 
-- 基础地址：`http://localhost:8000/api/v1`
+- 基础地址：业务接口 `http://localhost:8000/api/v1`
+- 探针接口：`http://localhost:8000/health`、`http://localhost:8000/ready`
 - 鉴权：受保护接口需在 Header 携带 `Authorization: Bearer <access_token>`
 - 统一返回：`{ "code": number, "msg": string, "data"?: any }`；`code=200` 表示业务成功。
+
+## 系统
+- `GET /health`（根路径，非 `/api/v1`）
+  快速存活检查，仅确认 HTTP 服务进程可响应。  
+  成功：`code=200`，`data={"status":"ok","service":"SneakerFlash","timestamp":RFC3339}`。
+- `GET /ready`（根路径，非 `/api/v1`）
+  就绪检查，校验 MySQL、Redis 和 Kafka Producer 初始化状态。  
+  成功：`code=200`，`data={"status":"ready","checks":{"database":{"status":"up"},"redis":{"status":"up"},"kafka":{"status":"up"}}}`。  
+  未就绪：HTTP `503`，`msg="服务未就绪"`，并在 `data.checks` 返回失败组件明细。
 
 ## 认证
 - `POST /register`  

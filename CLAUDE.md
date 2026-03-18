@@ -144,9 +144,9 @@ frontend/src/
 
 ## Frontend Design System
 
-- 主题色：`obsidian-bg` (深黑), `magma` (橙金 #f97316)
-- 动画：shimmer (流光), shake (震动), pulse-fast (脉搏)
-- 玻璃态：`.glass` 类 (黑色半透明 + 毛玻璃)
+- 主题基调：Editorial 杂志风，主背景 `#F9F8F6`、卡片 `#FFFFFF`、正文 `#1C1C1C`
+- 组件语言：硬边、细边框、无阴影，避免回流到玻璃态、发光和彩色强调
+- 动效：保留必要的 `shake` 等反馈动画，整体节奏克制
 - 组件库：Shadcn Vue
 
 ## Development Guidelines

@@ -70,76 +70,58 @@ onMounted(fetchOrders)
 
 <template>
   <MainLayout>
-    <section class="relative mx-auto max-w-6xl px-6 py-12">
-      <div class="pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_at_center,white,transparent)]">
-        <div class="absolute -left-10 top-0 h-64 w-64 rounded-full bg-magma-glow blur-3xl"></div>
-        <div class="absolute bottom-10 right-0 h-80 w-80 rounded-full bg-[#ea580c55] blur-3xl"></div>
-      </div>
-      <div class="relative mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <section class="mx-auto max-w-6xl px-6 py-16 md:py-24">
+      <div class="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p class="text-sm uppercase tracking-[0.3em] text-magma">Orders</p>
-          <h1 class="text-2xl font-semibold">订单中心</h1>
-          <p class="text-sm text-white/70">查看您的全部订单，点击订单可进入详情页完成支付。</p>
+          <p class="text-xs uppercase tracking-[0.3em] text-[#1C1C1C]/40">Orders</p>
+          <h1 class="font-serif text-2xl tracking-tight md:text-3xl">订单中心</h1>
+          <p class="mt-1 text-sm text-[#1C1C1C]/40">查看您的全部订单，点击订单可进入详情页完成支付。</p>
         </div>
-        <div class="flex items-center gap-3 text-sm">
+        <div class="flex items-center gap-4 text-sm">
           <button
-            class="rounded-full border border-obsidian-border px-3 py-1 text-white/80 transition hover:border-magma hover:text-magma"
-            :class="{ 'border-magma text-magma': state.status === '' }"
-            @click="onStatusChange('')"
+            v-for="tab in [
+              { label: '全部', value: '' },
+              { label: '待支付', value: '0' },
+              { label: '已支付', value: '1' },
+              { label: '失败', value: '2' },
+            ]"
+            :key="tab.value"
+            class="hover-underline pb-0.5 transition-colors"
+            :class="state.status === tab.value ? 'text-[#1C1C1C] font-medium' : 'text-[#1C1C1C]/40'"
+            @click="onStatusChange(tab.value)"
           >
-            全部
-          </button>
-          <button
-            class="rounded-full border border-obsidian-border px-3 py-1 text-white/80 transition hover:border-magma hover:text-magma"
-            :class="{ 'border-magma text-magma': state.status === '0' }"
-            @click="onStatusChange('0')"
-          >
-            待支付
-          </button>
-          <button
-            class="rounded-full border border-obsidian-border px-3 py-1 text-white/80 transition hover:border-magma hover:text-magma"
-            :class="{ 'border-magma text-magma': state.status === '1' }"
-            @click="onStatusChange('1')"
-          >
-            已支付
-          </button>
-          <button
-            class="rounded-full border border-obsidian-border px-3 py-1 text-white/80 transition hover:border-magma hover:text-magma"
-            :class="{ 'border-magma text-magma': state.status === '2' }"
-            @click="onStatusChange('2')"
-          >
-            失败
+            {{ tab.label }}
           </button>
         </div>
       </div>
 
       <div v-if="state.loading" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <div v-for="i in 6" :key="i" class="h-36 animate-pulse rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80"></div>
+        <div v-for="i in 6" :key="i" class="h-36 animate-pulse border border-[#1C1C1C]/10 bg-[#1C1C1C]/5"></div>
       </div>
 
-      <div v-else-if="state.items.length === 0" class="rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80 p-8 text-center text-white/70">
+      <div v-else-if="state.items.length === 0" class="border border-[#1C1C1C]/10 p-8 text-center text-[#1C1C1C]/40">
         暂无订单，去抢购或发布商品吧。
       </div>
 
       <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card v-for="order in state.items" :key="order.id" class="border-obsidian-border/70 bg-obsidian-card/80">
+        <Card v-for="order in state.items" :key="order.id" class="hover:border-[#1C1C1C]/30">
           <CardHeader class="space-y-2">
-            <CardTitle class="text-lg">订单号：{{ order.order_num }}</CardTitle>
-            <CardDescription class="text-white/70">状态：{{ statusText(order.status) }}</CardDescription>
+            <CardTitle class="font-serif text-lg tracking-tight">{{ order.order_num }}</CardTitle>
+            <CardDescription class="text-[#1C1C1C]/40">状态：{{ statusText(order.status) }}</CardDescription>
           </CardHeader>
           <CardContent class="flex items-center justify-between">
             <RouterLink
               :to="`/orders/${order.id}`"
-              class="text-sm text-magma underline decoration-magma/60 underline-offset-4"
+              class="hover-underline text-sm text-[#1C1C1C]"
             >
               查看详情 / 支付
             </RouterLink>
-            <span class="text-xs text-white/50">{{ order.created_at }}</span>
+            <span class="text-xs text-[#1C1C1C]/40">{{ order.created_at }}</span>
           </CardContent>
         </Card>
       </div>
 
-      <div v-if="state.items.length > 0" class="mt-6 flex items-center justify-between text-sm text-white/70">
+      <div v-if="state.items.length > 0" class="mt-6 flex items-center justify-between text-sm text-[#1C1C1C]/40">
         <span>第 {{ state.page }} 页 / 共 {{ Math.ceil(state.total / state.pageSize) || 1 }} 页</span>
         <div class="flex gap-3">
           <MagmaButton :disabled="state.page <= 1 || state.loading" @click="onPage(-1)">上一页</MagmaButton>

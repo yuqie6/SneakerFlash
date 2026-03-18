@@ -47,6 +47,15 @@ definitions:
     - start_time
     - stock
     type: object
+  handler.HealthStatusResponse:
+    properties:
+      service:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
   handler.IDResponse:
     properties:
       id:
@@ -124,6 +133,13 @@ definitions:
       status:
         type: string
     type: object
+  handler.ProbeStatusResponse:
+    properties:
+      detail:
+        type: string
+      status:
+        type: string
+    type: object
   handler.ProductListResponse:
     properties:
       items:
@@ -161,6 +177,26 @@ definitions:
         type: integer
     required:
     - plan_id
+    type: object
+  handler.ReadinessChecksResponse:
+    properties:
+      database:
+        $ref: '#/definitions/handler.ProbeStatusResponse'
+      kafka:
+        $ref: '#/definitions/handler.ProbeStatusResponse'
+      redis:
+        $ref: '#/definitions/handler.ProbeStatusResponse'
+    type: object
+  handler.ReadinessStatusResponse:
+    properties:
+      checks:
+        $ref: '#/definitions/handler.ReadinessChecksResponse'
+      service:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
     type: object
   handler.RefreshReq:
     properties:
@@ -497,6 +533,24 @@ paths:
       summary: 购买优惠券（模拟支付）
       tags:
       - Coupon
+  /health:
+    get:
+      description: 快速确认 HTTP 服务进程可响应
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.HealthStatusResponse'
+              type: object
+      summary: 存活检查
+      tags:
+      - 系统
   /login:
     post:
       consumes:
@@ -998,6 +1052,33 @@ paths:
       summary: 更新当前用户信息
       tags:
       - 用户
+  /ready:
+    get:
+      description: 校验 MySQL、Redis 与 Kafka Producer 是否可用
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/app.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.ReadinessStatusResponse'
+              type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            allOf:
+            - $ref: '#/definitions/app.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.ReadinessStatusResponse'
+              type: object
+      summary: 就绪检查
+      tags:
+      - 系统
   /refresh:
     post:
       consumes:

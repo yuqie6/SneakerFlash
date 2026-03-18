@@ -13,29 +13,72 @@
   }
 
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --primary: 24.6 95% 53.1%;
-    --primary-foreground: 0 0% 98%;
-  }
-
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --primary: 24.6 95% 53.1%;
-    --primary-foreground: 0 0% 98%;
+    --background: 40 20% 98%;
+    --foreground: 0 0% 11%;
+    --primary: 0 0% 11%;
+    --primary-foreground: 0 0% 100%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 11%;
+    --border: 0 0% 11%;
+    --input: 0 0% 11%;
+    --ring: 0 0% 11%;
+    --muted: 40 10% 94%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 40 10% 94%;
+    --accent-foreground: 0 0% 11%;
+    --destructive: 0 0% 11%;
+    --destructive-foreground: 0 0% 100%;
+    --secondary: 40 10% 94%;
+    --secondary-foreground: 0 0% 11%;
   }
 
   body {
-    @apply bg-obsidian-bg text-white antialiased;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+    @apply bg-editorial-bg text-editorial-text antialiased;
+    font-feature-settings: "kern" 1;
   }
-}
-
-.glass {
-  @apply bg-black/40 backdrop-blur-xl border border-white/10;
 }
 
 .animate-shake {
   animation: shake 0.35s ease-in-out 1;
+}
+
+.hover-underline {
+  @apply relative;
+}
+.hover-underline::after {
+  content: "";
+  @apply absolute bottom-0 left-0 h-px w-0 bg-current transition-all duration-300;
+}
+.hover-underline:hover::after {
+  @apply w-full;
+}
+
+[data-sonner-toast][data-styled="true"] {
+  border: 1px solid rgba(28, 28, 28, 0.12) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: #ffffff !important;
+  color: #1c1c1c !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-title] {
+  color: #1c1c1c !important;
+  font-family: "Playfair Display", Georgia, serif;
+  letter-spacing: -0.02em;
+}
+
+[data-sonner-toast][data-styled="true"] [data-description] {
+  color: rgba(28, 28, 28, 0.6) !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-button],
+[data-sonner-toast][data-styled="true"] [data-close-button] {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-button] {
+  border: 1px solid #1c1c1c !important;
+  background: #1c1c1c !important;
+  color: #ffffff !important;
 }

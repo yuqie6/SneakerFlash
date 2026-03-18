@@ -11,6 +11,6 @@ const props = defineProps<Props>()
 
 <template>
   <div
-    :class="cn('animate-pulse rounded-md bg-obsidian-border', props.class)"
+    :class="cn('animate-pulse bg-[#1C1C1C]/5', props.class)"
   />
 </template>

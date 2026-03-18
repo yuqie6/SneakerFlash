@@ -4,7 +4,6 @@ import { useRoute, useRouter } from "vue-router"
 import MainLayout from "@/layout/MainLayout.vue"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import MagmaButton from "@/components/motion/MagmaButton.vue"
-import ParallaxCard from "@/components/motion/ParallaxCard.vue"
 import api, { resolveAssetUrl } from "@/lib/api"
 import type { Order, OrderWithPayment } from "@/types/order"
 import type { Payment } from "@/types/payment"
@@ -61,7 +60,7 @@ const displayCoupons = computed(() => {
   return list
 })
 const productCover = computed(
-  () => resolveAssetUrl(product.value?.image) || "https://dummyimage.com/400x300/0f0f14/ffffff&text=SneakerFlash"
+  () => resolveAssetUrl(product.value?.image) || "https://dummyimage.com/400x300/F9F8F6/1C1C1C&text=SneakerFlash"
 )
 
 const pay = async (status: Payment["status"]) => {
@@ -130,29 +129,20 @@ const applyCoupon = async () => {
 
 const orderStatusText = (s?: number) => {
   switch (s) {
-    case 0:
-      return "待支付"
-    case 1:
-      return "已支付"
-    case 2:
-      return "支付失败"
-    default:
-      return "未知"
+    case 0: return "待支付"
+    case 1: return "已支付"
+    case 2: return "支付失败"
+    default: return "未知"
   }
 }
 
 const paymentStatusText = (s?: Payment["status"]) => {
   switch (s) {
-    case "pending":
-      return "待支付"
-    case "paid":
-      return "已支付"
-    case "failed":
-      return "失败"
-    case "refunded":
-      return "已退款"
-    default:
-      return "未知"
+    case "pending": return "待支付"
+    case "paid": return "已支付"
+    case "failed": return "失败"
+    case "refunded": return "已退款"
+    default: return "未知"
   }
 }
 
@@ -161,160 +151,144 @@ onMounted(fetchDetail)
 
 <template>
   <MainLayout>
-    <section class="relative mx-auto max-w-4xl px-6 py-12">
-      <div class="pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_at_center,white,transparent)]">
-        <div class="absolute -left-10 top-0 h-64 w-64 rounded-full bg-magma-glow blur-3xl"></div>
-        <div class="absolute bottom-10 right-0 h-80 w-80 rounded-full bg-[#ea580c55] blur-3xl"></div>
-      </div>
-
-      <div class="relative flex items-center justify-between">
+    <section class="mx-auto max-w-4xl px-6 py-16 md:py-24">
+      <div class="flex items-center justify-between">
         <div>
-          <p class="text-sm uppercase tracking-[0.3em] text-magma">Order Detail</p>
-          <h1 class="text-2xl font-semibold">订单详情</h1>
+          <p class="text-xs uppercase tracking-[0.3em] text-[#1C1C1C]/40">Order Detail</p>
+          <h1 class="font-serif text-2xl tracking-tight md:text-3xl">订单详情</h1>
         </div>
-        <button class="text-sm text-white/60 underline underline-offset-4" @click="router.back()">返回</button>
+        <button class="hover-underline text-sm text-[#1C1C1C]/60" @click="router.back()">返回</button>
       </div>
 
-      <div v-if="loading" class="mt-6 h-40 animate-pulse rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80"></div>
+      <div v-if="loading" class="mt-6 h-40 animate-pulse border border-[#1C1C1C]/10 bg-[#1C1C1C]/5"></div>
 
-      <div v-else-if="!data" class="mt-6 rounded-2xl border border-obsidian-border/70 bg-obsidian-card/80 p-6 text-white/70">
-        未找到订单。
-      </div>
+      <div v-else-if="!data" class="mt-6 border border-[#1C1C1C]/10 p-6 text-[#1C1C1C]/40">未找到订单。</div>
 
-      <div v-else class="relative mt-6 flex flex-col gap-6">
-        <!-- 商品信息卡片 -->
-        <Card class="overflow-hidden border-obsidian-border/70 bg-gradient-to-br from-obsidian-card via-black to-obsidian-card">
+      <div v-else class="mt-8 flex flex-col gap-6">
+        <!-- 商品信息 -->
+        <Card class="overflow-hidden">
           <div class="grid gap-6 md:grid-cols-[280px_1fr]">
-            <ParallaxCard class="m-4 mr-0 md:m-6">
-              <img :src="productCover" alt="" class="h-[200px] w-full rounded-xl object-cover md:h-[240px]" />
-            </ParallaxCard>
+            <div class="m-4 mr-0 md:m-6">
+              <img :src="productCover" alt="" class="h-[200px] w-full object-cover md:h-[240px]" />
+            </div>
             <div class="flex flex-col justify-center px-4 pb-4 md:py-6 md:pr-6">
-              <p class="text-xs uppercase tracking-[0.2em] text-magma">Product Info</p>
-              <h2 class="mt-2 text-2xl font-semibold">{{ product?.name || '商品加载中...' }}</h2>
-              <p class="mt-2 text-2xl font-semibold text-magma">{{ formatPrice(product?.price || 0) }}</p>
-              <div class="mt-4 flex flex-wrap gap-4 text-sm text-white/70">
-                <div class="flex items-center gap-2">
-                  <span class="h-2 w-2 rounded-full bg-magma"></span>
-                  <span>商品 ID: {{ order?.product_id }}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="h-2 w-2 rounded-full bg-white/40"></span>
-                  <span>库存: {{ product?.stock ?? '-' }}</span>
-                </div>
+              <p class="text-xs uppercase tracking-[0.2em] text-[#1C1C1C]/40">Product</p>
+              <h2 class="mt-2 font-serif text-2xl tracking-tight">{{ product?.name || '商品加载中...' }}</h2>
+              <p class="mt-2 text-2xl">{{ formatPrice(product?.price || 0) }}</p>
+              <div class="mt-4 flex flex-wrap gap-4 text-sm text-[#1C1C1C]/40">
+                <span>商品 ID: {{ order?.product_id }}</span>
+                <span>库存: {{ product?.stock ?? '-' }}</span>
               </div>
             </div>
           </div>
         </Card>
 
         <div class="grid gap-6 md:grid-cols-2">
-          <!-- 订单信息卡片 -->
-          <Card class="border-obsidian-border/70 bg-obsidian-card/80">
+          <!-- 订单信息 -->
+          <Card>
             <CardHeader>
-              <p class="text-xs uppercase tracking-[0.2em] text-magma">Order Info</p>
-              <CardTitle class="text-lg">订单信息</CardTitle>
-              <CardDescription>订单状态与基础信息</CardDescription>
+              <p class="text-xs uppercase tracking-[0.2em] text-[#1C1C1C]/40">Order</p>
+              <CardTitle class="font-serif text-lg tracking-tight">订单信息</CardTitle>
+              <CardDescription class="text-[#1C1C1C]/40">订单状态与基础信息</CardDescription>
             </CardHeader>
-            <CardContent class="space-y-3 text-sm text-white/80">
+            <CardContent class="space-y-3 text-sm">
               <div class="flex items-center justify-between">
-                <span>订单号</span>
-                <span class="font-mono text-xs">{{ order?.order_num }}</span>
+                <span class="text-[#1C1C1C]/60">订单号</span>
+                <span class="text-xs tracking-[0.12em] text-[#1C1C1C]/60">{{ order?.order_num }}</span>
               </div>
               <div class="flex items-center justify-between">
-                <span>状态</span>
-                <span
-                  class="rounded-full border px-2 py-0.5 text-xs"
-                  :class="order?.status === 1 ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200' : order?.status === 2 ? 'border-red-500/40 bg-red-500/15 text-red-200' : 'border-magma/40 bg-magma/15 text-magma'"
-                >
+                <span class="text-[#1C1C1C]/60">状态</span>
+                <span class="border px-2 py-0.5 text-xs" :class="order?.status === 1 ? 'border-[#1C1C1C]/20 text-[#1C1C1C]/70' : order?.status === 2 ? 'border-[#1C1C1C]/30 text-[#1C1C1C]/50' : 'border-[#1C1C1C]/20 text-[#1C1C1C]/70'">
                   {{ orderStatusText(order?.status) }}
                 </span>
               </div>
               <div class="flex items-center justify-between">
-                <span>创建时间</span>
-                <span class="text-white/60">{{ order?.created_at }}</span>
+                <span class="text-[#1C1C1C]/60">创建时间</span>
+                <span class="text-[#1C1C1C]/40">{{ order?.created_at }}</span>
               </div>
             </CardContent>
           </Card>
 
-          <Card class="border-obsidian-border/70 bg-gradient-to-b from-obsidian-card via-black to-obsidian-card">
+          <!-- 支付信息 -->
+          <Card>
             <CardHeader>
-              <p class="text-xs uppercase tracking-[0.2em] text-magma">Payment</p>
-              <CardTitle class="text-lg">支付信息</CardTitle>
-              <CardDescription>确认金额并完成支付</CardDescription>
+              <p class="text-xs uppercase tracking-[0.2em] text-[#1C1C1C]/40">Payment</p>
+              <CardTitle class="font-serif text-lg tracking-tight">支付信息</CardTitle>
+              <CardDescription class="text-[#1C1C1C]/40">确认金额并完成支付</CardDescription>
             </CardHeader>
-          <CardContent class="space-y-4 text-sm text-white/80">
-            <div class="flex items-center justify-between">
-              <span>支付单号</span>
-              <span class="font-mono">{{ payment?.payment_id || "-" }}</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>支付状态</span>
-              <span class="text-magma">{{ paymentStatusText(payment?.status) }}</span>
-            </div>
-
-            <div class="space-y-2 rounded-2xl border border-obsidian-border/70 bg-black/40 p-4">
+            <CardContent class="space-y-4 text-sm">
               <div class="flex items-center justify-between">
-                <span>商品原价</span>
-                <span class="text-white">{{ formatPrice(basePrice) }}</span>
+                <span class="text-[#1C1C1C]/60">支付单号</span>
+                <span class="text-xs tracking-[0.12em] text-[#1C1C1C]/60">{{ payment?.payment_id || "-" }}</span>
               </div>
-              <div class="space-y-2">
-                <div class="flex items-center justify-between text-xs text-white/60">
-                  <span>选择优惠券</span>
-                  <span>{{ couponsLoading ? "加载中..." : `可用 ${usableCoupons.length} 张` }}</span>
+              <div class="flex items-center justify-between">
+                <span class="text-[#1C1C1C]/60">支付状态</span>
+                <span class="text-[#1C1C1C]/70">{{ paymentStatusText(payment?.status) }}</span>
+              </div>
+
+              <div class="space-y-2 border border-[#1C1C1C]/10 p-4">
+                <div class="flex items-center justify-between">
+                  <span class="text-[#1C1C1C]/60">商品原价</span>
+                  <span>{{ formatPrice(basePrice) }}</span>
                 </div>
-                <select
-                  v-model="selectedCouponId"
-                  :disabled="!isPendingPayment || couponsLoading || displayCoupons.length === 0"
-                  class="w-full rounded-lg border border-obsidian-border/70 bg-black/60 px-3 py-2 text-sm text-white outline-none transition focus:border-magma disabled:opacity-50"
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between text-xs text-[#1C1C1C]/40">
+                    <span>选择优惠券</span>
+                    <span>{{ couponsLoading ? "加载中..." : `可用 ${usableCoupons.length} 张` }}</span>
+                  </div>
+                  <select
+                    v-model="selectedCouponId"
+                    :disabled="!isPendingPayment || couponsLoading || displayCoupons.length === 0"
+                    class="w-full border border-[#1C1C1C]/10 bg-transparent px-3 py-2 text-sm outline-none transition-colors focus:border-[#1C1C1C] disabled:opacity-50"
+                  >
+                    <option :value="null">不使用优惠券</option>
+                    <option v-for="coupon in displayCoupons" :key="coupon.id" :value="coupon.id">
+                      {{ coupon.title }} · {{ coupon.type === 'discount' ? coupon.discount_rate / 10 + '折' : '-' + formatPrice(coupon.amount_cents / 100) }}
+                    </option>
+                  </select>
+                  <div class="flex items-center gap-2 text-xs">
+                    <MagmaButton
+                      class="flex-1 justify-center py-2"
+                      :loading="applyingCoupon"
+                      :disabled="!isPendingPayment || (!selectedCouponId && !currentCoupon)"
+                      @click="applyCoupon"
+                    >
+                      应用
+                    </MagmaButton>
+                    <button
+                      class="flex-1 border border-[#1C1C1C]/20 px-3 py-2 text-xs transition-colors hover:border-[#1C1C1C] disabled:opacity-50"
+                      :disabled="!isPendingPayment || (!currentCoupon && !selectedCouponId) || applyingCoupon"
+                      @click="() => { selectedCouponId = null; applyCoupon() }"
+                    >
+                      不使用优惠券
+                    </button>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-[#1C1C1C]/60">应付金额</span>
+                  <span class="text-2xl">{{ formatPrice(payableAmount) }}</span>
+                </div>
+                <div v-if="savedAmount > 0" class="flex items-center justify-between text-xs text-[#1C1C1C]/60">
+                  <span>已优惠</span>
+                  <span>-{{ formatPrice(savedAmount) }}</span>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-3 pt-2">
+                <MagmaButton class="flex-1 justify-center" :loading="paying" :disabled="!isPendingPayment || paying" @click="pay('paid')">
+                  确认支付
+                </MagmaButton>
+                <button
+                  class="flex-1 border border-[#1C1C1C]/20 px-4 py-2 text-sm transition-colors hover:border-[#1C1C1C] disabled:opacity-50"
+                  :disabled="!isPendingPayment || paying"
+                  @click="pay('failed')"
                 >
-                  <option :value="null">不使用优惠券</option>
-                  <option v-for="coupon in displayCoupons" :key="coupon.id" :value="coupon.id">
-                    {{ coupon.title }} · {{ coupon.type === 'discount' ? coupon.discount_rate / 10 + '折' : '-' + formatPrice(coupon.amount_cents / 100) }}
-                  </option>
-                </select>
-                <div class="flex items-center gap-2 text-xs text-white/60">
-                  <MagmaButton
-                    class="flex-1 justify-center"
-                    size="sm"
-                    :loading="applyingCoupon"
-                    :disabled="!isPendingPayment || (!selectedCouponId && !currentCoupon)"
-                    @click="applyCoupon"
-                  >
-                    应用
-                  </MagmaButton>
-                  <button
-                    class="flex-1 rounded-full border border-obsidian-border px-3 py-2 text-xs text-white transition hover:border-magma hover:text-magma disabled:opacity-50"
-                    :disabled="!isPendingPayment || (!currentCoupon && !selectedCouponId) || applyingCoupon"
-                    @click="() => { selectedCouponId = null; applyCoupon() }"
-                  >
-                    不使用优惠券
-                  </button>
-                </div>
+                  取消订单
+                </button>
               </div>
-              <div class="flex items-center justify-between">
-                <span>应付金额</span>
-                <span class="text-2xl font-semibold text-magma">{{ formatPrice(payableAmount) }}</span>
-              </div>
-              <div v-if="savedAmount > 0" class="flex items-center justify-between text-xs text-emerald-300">
-                <span>已优惠</span>
-                <span>-{{ formatPrice(savedAmount) }}</span>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-3 pt-2">
-              <MagmaButton class="flex-1 justify-center" :loading="paying" :disabled="!isPendingPayment || paying" @click="pay('paid')">
-                确认支付
-              </MagmaButton>
-              <button
-                class="flex-1 rounded-full border border-obsidian-border px-4 py-2 text-sm text-white transition hover:border-magma hover:text-magma disabled:opacity-50"
-                :disabled="!isPendingPayment || paying"
-                @click="pay('failed')"
-              >
-                取消订单
-              </button>
-            </div>
-            <p class="text-xs text-white/60">优惠券仅在待支付状态下可使用，支付后将自动发货。</p>
-          </CardContent>
-        </Card>
+              <p class="text-xs text-[#1C1C1C]/40">优惠券仅在待支付状态下可使用，支付后将自动发货。</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </section>

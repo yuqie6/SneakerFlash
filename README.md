@@ -1,6 +1,6 @@
 # SneakerFlash
 
-> 面向高并发球鞋秒杀场景的全栈项目。后端使用 `Go + Gin + GORM + Redis + Kafka` 构建秒杀、异步建单、支付回调、VIP/优惠券闭环；前端使用 `Vue 3 + TypeScript + Vite + Tailwind` 提供黑金风格的交易体验。
+> 面向高并发球鞋秒杀场景的全栈项目。后端使用 `Go + Gin + GORM + Redis + Kafka` 构建秒杀、异步建单、支付回调、VIP/优惠券闭环；前端使用 `Vue 3 + TypeScript + Vite + Tailwind` 提供 Editorial 风格的交易体验。
 
 ## 项目定位
 - **核心场景**：限量商品秒杀、异步建单、订单支付、VIP 成长体系、优惠券发放与核销。
@@ -120,4 +120,3 @@ make lint
 - 补齐 `internal/service` 层核心测试
 - 补齐接口文档与 Swagger 的一致性检查
 - 为运维文档增加监控面板截图与告警阈值基线
-

@@ -12,7 +12,7 @@ const props = defineProps<Props>()
 
 <template>
   <AvatarFallback
-    :class="cn('flex h-full w-full items-center justify-center rounded-full bg-obsidian-card text-white', props.class)"
+    :class="cn('flex h-full w-full items-center justify-center bg-[#1C1C1C]/5 text-[#1C1C1C]', props.class)"
   >
     <slot />
   </AvatarFallback>
