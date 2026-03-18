@@ -1,6 +1,6 @@
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
-NPM ?= npm
+FRONTEND_PM ?= pnpm
 
 .PHONY: lint lint-go lint-frontend test build-api build-worker frontend-build
 
@@ -10,7 +10,7 @@ lint-go:
 	$(GOLANGCI_LINT) run ./...
 
 lint-frontend:
-	cd "frontend" && $(NPM) run lint
+	cd "frontend" && $(FRONTEND_PM) lint
 
 test:
 	$(GO) test ./...
@@ -22,5 +22,4 @@ build-worker:
 	$(GO) build ./cmd/worker
 
 frontend-build:
-	cd "frontend" && $(NPM) run build
-
+	cd "frontend" && $(FRONTEND_PM) build

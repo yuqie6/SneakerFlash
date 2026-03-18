@@ -9,11 +9,11 @@
 - Tailwind CSS v3 + Shadcn-vue（New York / Zinc），Motion-v，Lenis
 - 状态：Pinia；请求：Axios；工具：@vueuse/core、lucide-vue-next、date-fns、clsx/tailwind-merge/cva、vue-sonner
 - 初始化命令（在项目根执行）：
-  1) `npm create vite@latest frontend -- --template vue-ts`
+  1) `pnpm create vite frontend --template vue-ts`
   2) `cd frontend`
-  3) `npm install -D tailwindcss postcss autoprefixer && npx tailwindcss init -p`
-  4) `npm install axios pinia vue-router motion-v @vueuse/core lucide-vue-next clsx tailwind-merge class-variance-authority date-fns vue-sonner`
-  5) `npx shadcn-vue@latest init`（New York, Zinc）
+  3) `pnpm add -D tailwindcss postcss autoprefixer && pnpm exec tailwindcss init -p`
+  4) `pnpm add axios pinia vue-router motion-v @vueuse/core lucide-vue-next clsx tailwind-merge class-variance-authority date-fns vue-sonner`
+  5) `pnpm dlx shadcn-vue@latest init`（New York, Zinc）
 
 ## 目录结构
 ```
@@ -68,6 +68,6 @@ src/
 6) 体验：引入 Motion-v + Lenis，全局 toast provider，焦点态/加载遮罩。
 
 ## 测试与验证
-- 运行 `npm run dev` 验证路由与接口调用（需后端/Redis/Kafka 就绪）。
-- `npm run build` 或 `npx vue-tsc --noEmit` 做类型/构建检查。
+- 运行 `pnpm dev` 验证路由与接口调用（需后端/Redis/Kafka 就绪）。
+- `pnpm build` 或 `pnpm exec vue-tsc --noEmit` 做类型/构建检查。
 - 手工覆盖：登录失败提示、列表空态、秒杀失败提示、token 失效跳转。

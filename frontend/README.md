@@ -16,15 +16,15 @@
 
 ## 启动
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ## 常用命令
 ```bash
-npm run lint
-npm run build
-npm run preview
+pnpm lint
+pnpm build
+pnpm preview
 ```
 
 ## 关键目录

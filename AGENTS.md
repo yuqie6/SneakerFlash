@@ -26,7 +26,7 @@
   log: { level: "info", path: "log/api.log", max_age: 7, max_backups: 3, max_size: 100 }
   ```
 - 启动：`go run ./cmd/api`（自动迁移模型），`go run ./cmd/worker`（消费 Kafka）；依赖 MySQL/Redis/Kafka，配置需与本地一致。
-- 前端：在 `frontend/` 运行 `npm install`，`npm run dev` / `npm run build` / `npm run preview`；API 基址默认 `http://localhost:8000/api/v1`，可用 `VITE_API_BASE_URL` 覆盖。
+- 前端：在 `frontend/` 运行 `pnpm install`，`pnpm dev` / `pnpm build` / `pnpm preview`；API 基址默认 `http://localhost:8000/api/v1`，可用 `VITE_API_BASE_URL` 覆盖。
 
 ## 后端开发规范
 - 分层：handler -> service -> repository，仓储/服务提供 `WithContext`；统一响应 `{code,msg,data}`，错误码定义在 `internal/pkg/e`（包含 401/429/7xx 风控码）。
@@ -44,7 +44,7 @@
 ## 测试与验证
 - 当前无自动化测试，改动核心逻辑（库存扣减、订单、限流、支付回调等）请补 Go 表驱动用例并确保 `go test ./...` 通过。
 - Go 代码检查统一使用根目录 `.golangci.yml`；后端改动完成后至少执行 `golangci-lint run ./...`，优先修复本次改动直接引入的问题。
-- 前端如新增复杂交互可引入/补充 Vitest + vue-test-utils（目前未配置），至少保证 `npm run build`/`vue-tsc -b` 通过。
+- 前端如新增复杂交互可引入/补充 Vitest + vue-test-utils（目前未配置），至少保证 `pnpm build`/`vue-tsc -b` 通过。
 - 压测需参考 `docs/perf.md` 与 `perf/` 脚本，必要时关闭/调低限流再跑 k6。
 
 ## 文档约束

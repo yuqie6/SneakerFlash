@@ -71,8 +71,8 @@ go run ./cmd/worker
 ### 4. 启动前端
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ## 常用命令

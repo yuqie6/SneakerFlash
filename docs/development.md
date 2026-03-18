@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | Go | `>= 1.25.4` | 后端 API / Worker |
 | Node.js | `>= 18` | 前端开发与构建 |
-| npm | 与 Node 配套 | 前端依赖管理 |
+| pnpm | `>= 10` | 前端依赖管理 |
 | Docker | 最新稳定版 | 拉起 MySQL / Redis / Kafka / 监控 |
 | golangci-lint | `v1.64+` | Go 代码检查 |
 
@@ -42,8 +42,8 @@ go run ./cmd/worker
 ### 4. 启动前端
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ## 常用命令
@@ -99,7 +99,7 @@ swag init -g ./cmd/api/main.go -o ./docs
   - `unused`
 
 ### Frontend
-- `frontend/package.json` 中提供 `npm run lint`
+- `frontend/package.json` 中提供 `pnpm lint`
 - 构建即包含 `vue-tsc -b`
 
 ## 当前测试现状

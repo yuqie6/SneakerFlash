@@ -33,10 +33,10 @@ golangci-lint run ./...
 ### 前端
 ```bash
 cd frontend
-npm install
-npm run dev          # 开发服务器 (端口 5173)
-npm run build        # 生产构建
-npm run lint         # ESLint 检查
+pnpm install
+pnpm dev             # 开发服务器 (端口 5173)
+pnpm build           # 生产构建
+pnpm lint            # ESLint 检查
 vue-tsc -b           # TypeScript 类型检查
 ```
 
@@ -155,5 +155,5 @@ frontend/src/
 - Go 代码检查统一遵循根目录 `.golangci.yml`，后端改动后优先执行 `golangci-lint run ./...`
 - 前端 API 调用统一使用 `lib/api.ts` 的 axios 实例
 - 修改核心逻辑（库存、订单、限流）需补充 Go 表驱动测试
-- 前端提交前需通过 `npm run build` 和 `vue-tsc -b` 验证
+- 前端提交前需通过 `pnpm build` 和 `vue-tsc -b` 验证
 - `README.md` 是项目总入口，`docs/README.md` 是文档导航；运行方式、配置、接口、运维变更需同步文档
